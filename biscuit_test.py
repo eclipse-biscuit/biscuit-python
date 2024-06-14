@@ -463,3 +463,14 @@ def test_extern_func():
     policy = authorizer.build_unauthenticated().authorize()
     assert policy == 0
 
+def test_append_third_party_block():
+    root_kp = KeyPair()
+    external_kp = KeyPair()
+
+    builder = BiscuitBuilder("user({user});", {'user': "123"})
+    biscuit = builder.build(root_kp.private_key)
+
+    third_party_block = BlockBuilder("external_fact({fact});", {'fact': "456"})
+    new_biscuit = biscuit.append_third_party_block(external_kp, third_party_block)
+
+    assert str(new_biscuit.block_external_key(1)) == str(external_kp.public_key)
