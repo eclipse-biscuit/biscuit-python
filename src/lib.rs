@@ -1273,7 +1273,7 @@ impl PyUnverifiedBiscuit {
 
 /// Main module for the biscuit_auth lib
 #[pymodule]
-fn biscuit_auth(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
+pub fn biscuit_auth(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<PyKeyPair>()?;
     m.add_class::<PyPublicKey>()?;
     m.add_class::<PyPrivateKey>()?;
