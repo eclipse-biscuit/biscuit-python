@@ -1,5 +1,7 @@
 // There seem to be false positives with pyo3
 #![allow(clippy::borrow_deref_ref)]
+#![allow(unexpected_cfgs)]
+#![allow(clippy::useless_conversion)]
 use ::biscuit_auth::AuthorizerBuilder;
 use ::biscuit_auth::RootKeyProvider;
 use ::biscuit_auth::UnverifiedBiscuit;
@@ -1091,7 +1093,7 @@ impl Eq for PyDate {}
 
 impl PartialOrd for PyDate {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        self.0.to_string().partial_cmp(&other.0.to_string())
+        Some(self.cmp(other))
     }
 }
 
