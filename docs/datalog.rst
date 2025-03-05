@@ -34,7 +34,7 @@ Rules, checks and policies can also contain parameters for public keys. Those ar
 ... check if admin({user}) trusting {rights_service_pubkey}
 ... """,
 ... {'user': "abcd" },
-... {'rights_service_pubkey': PublicKey.from_hex("9e124fbb46ff99a87219aef4b09f4f6c3b7fd96b7bd279e38af3ef429a101c69") })
+... {'rights_service_pubkey': PublicKey("ed25519/9e124fbb46ff99a87219aef4b09f4f6c3b7fd96b7bd279e38af3ef429a101c69") })
 check if admin("abcd") trusting ed25519/9e124fbb46ff99a87219aef4b09f4f6c3b7fd96b7bd279e38af3ef429a101c69;
 <BLANKLINE>
 

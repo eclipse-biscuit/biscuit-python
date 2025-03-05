@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from biscuit_auth import KeyPair, Authorizer, AuthorizerBuilder, Biscuit, BiscuitBuilder, BlockBuilder, Check, Fact, KeyPair, Policy, PrivateKey, PublicKey, Rule, UnverifiedBiscuit
+from biscuit_auth import Algorithm, KeyPair, Authorizer, AuthorizerBuilder, Biscuit, BiscuitBuilder, BlockBuilder, Check, Fact, KeyPair, Policy, PrivateKey, PublicKey, Rule, UnverifiedBiscuit
 
 def test_fact():
     fact = Fact('fact(1, true, "", "Test", hex:aabbcc, 2023-04-29T01:00:00Z)')
@@ -13,7 +13,7 @@ def test_fact():
 
 def test_biscuit_builder():
     kp = KeyPair()
-    pubkey = PublicKey.from_hex("acdd6d5b53bfee478bf689f8e012fe7988bf755e3d7c5152947abc149bc20189")
+    pubkey = PublicKey("ed25519/acdd6d5b53bfee478bf689f8e012fe7988bf755e3d7c5152947abc149bc20189")
 
     builder = BiscuitBuilder(
       """
@@ -81,7 +81,7 @@ check if add_code(true, true) trusting ed25519/acdd6d5b53bfee478bf689f8e012fe798
     assert True
 
 def test_block_builder():
-    pubkey = PublicKey.from_hex("acdd6d5b53bfee478bf689f8e012fe7988bf755e3d7c5152947abc149bc20189")
+    pubkey = PublicKey("ed25519/acdd6d5b53bfee478bf689f8e012fe7988bf755e3d7c5152947abc149bc20189")
     builder = BlockBuilder(
       """
         string({str});
@@ -134,7 +134,7 @@ check if add_code(true, true) trusting ed25519/acdd6d5b53bfee478bf689f8e012fe798
 """
 
 def test_authorizer_builder():
-    pubkey = PublicKey.from_hex("acdd6d5b53bfee478bf689f8e012fe7988bf755e3d7c5152947abc149bc20189")
+    pubkey = PublicKey("ed25519/acdd6d5b53bfee478bf689f8e012fe7988bf755e3d7c5152947abc149bc20189")
     builder = AuthorizerBuilder(
       """
         string({str});
@@ -207,7 +207,7 @@ def test_authorizer_limits():
 
 
 def test_key_selection():
-    private_key = PrivateKey.from_hex("473b5189232f3f597b5c2f3f9b0d5e28b1ee4e7cce67ec6b7fbf5984157a6b97")
+    private_key = PrivateKey("ed25519-private/473b5189232f3f597b5c2f3f9b0d5e28b1ee4e7cce67ec6b7fbf5984157a6b97")
     root = KeyPair.from_private_key(private_key)
     other_root = KeyPair()
 
@@ -238,7 +238,7 @@ def test_key_selection():
       pass
 
 def test_complete_lifecycle():
-    private_key = PrivateKey.from_hex("473b5189232f3f597b5c2f3f9b0d5e28b1ee4e7cce67ec6b7fbf5984157a6b97")
+    private_key = PrivateKey("ed25519-private/473b5189232f3f597b5c2f3f9b0d5e28b1ee4e7cce67ec6b7fbf5984157a6b97")
     root = KeyPair.from_private_key(private_key)
 
     biscuit_builder = BiscuitBuilder("user({id})", { 'id': "1234" })
@@ -267,7 +267,7 @@ def test_complete_lifecycle():
     assert facts[0].terms == ["1234"]
 
 def test_snapshot():
-    private_key = PrivateKey.from_hex("473b5189232f3f597b5c2f3f9b0d5e28b1ee4e7cce67ec6b7fbf5984157a6b97")
+    private_key = PrivateKey("ed25519-private/473b5189232f3f597b5c2f3f9b0d5e28b1ee4e7cce67ec6b7fbf5984157a6b97")
     root = KeyPair.from_private_key(private_key)
 
     biscuit_builder = BiscuitBuilder("user({id})", { 'id': "1234" })
@@ -318,46 +318,46 @@ def test_snapshot():
 
 def test_public_keys():
     # Happy path (hex to bytes and back)
-    public_key_from_hex = PublicKey.from_hex("acdd6d5b53bfee478bf689f8e012fe7988bf755e3d7c5152947abc149bc20189")
+    public_key_from_hex = PublicKey("ed25519/acdd6d5b53bfee478bf689f8e012fe7988bf755e3d7c5152947abc149bc20189")
     public_key_bytes = bytes(public_key_from_hex.to_bytes())
-    public_key_from_bytes = PublicKey.from_bytes(public_key_bytes)
-    assert public_key_from_bytes.to_hex() == "acdd6d5b53bfee478bf689f8e012fe7988bf755e3d7c5152947abc149bc20189"
+    public_key_from_bytes = PublicKey.from_bytes(public_key_bytes, Algorithm.Ed25519)
+    assert repr(public_key_from_bytes) == "ed25519/acdd6d5b53bfee478bf689f8e012fe7988bf755e3d7c5152947abc149bc20189"
 
     # Not valid hex
     with pytest.raises(ValueError):
-        PublicKey.from_hex("notarealkey")
+        PublicKey("notarealkey")
 
     # Valid hex, but too short
     with pytest.raises(ValueError):
-        PublicKey.from_hex("deadbeef1234")
+        PublicKey("ed25519/deadbeef1234")
 
     # Not enough bytes
     with pytest.raises(ValueError):
-        PublicKey.from_bytes(b"1230fw9ia3")
+        PublicKey.from_bytes(b"1230fw9ia3", Algorithm.Ed25519)
 
 def test_private_keys():
     # Happy path (hex to bytes and back)
-    private_key_from_hex = PrivateKey.from_hex("12aca40167fbdd1a11037e9fd440e3d510d9d9dea70a6646aa4aaf84d718d75a")
+    private_key_from_hex = PrivateKey("ed25519-private/12aca40167fbdd1a11037e9fd440e3d510d9d9dea70a6646aa4aaf84d718d75a")
     private_key_bytes = bytes(private_key_from_hex.to_bytes())
-    private_key_from_bytes = PrivateKey.from_bytes(private_key_bytes)
-    assert private_key_from_bytes.to_hex() == "12aca40167fbdd1a11037e9fd440e3d510d9d9dea70a6646aa4aaf84d718d75a"
+    private_key_from_bytes = PrivateKey.from_bytes(private_key_bytes, Algorithm.Ed25519)
+    assert repr(private_key_from_bytes) == "ed25519-private/12aca40167fbdd1a11037e9fd440e3d510d9d9dea70a6646aa4aaf84d718d75a"
 
     # Not valid hex
     with pytest.raises(ValueError):
-        PrivateKey.from_hex("notarealkey")
+        PrivateKey("notarealkey")
 
     # Valid hex, but too short
     with pytest.raises(ValueError):
-        PrivateKey.from_hex("deadbeef1234")
+        PrivateKey("ed25519-private/deadbeef1234")
 
     # Not enough bytes
     with pytest.raises(ValueError):
-        PrivateKey.from_bytes(b"1230fw9ia3")
+        PrivateKey.from_bytes(b"1230fw9ia3", Algorithm.Ed25519)
 
 
 def test_biscuit_inspection():
     kp = KeyPair()
-    pubkey = PublicKey.from_hex("acdd6d5b53bfee478bf689f8e012fe7988bf755e3d7c5152947abc149bc20189")
+    pubkey = PublicKey("ed25519/acdd6d5b53bfee478bf689f8e012fe7988bf755e3d7c5152947abc149bc20189")
 
     builder = BiscuitBuilder(
       """
@@ -391,7 +391,7 @@ def test_biscuit_inspection():
     assert utoken2.block_source(1) == "test(false);\n"
 
 def test_biscuit_revocation_ids():
-    public_key = PublicKey.from_hex("acdd6d5b53bfee478bf689f8e012fe7988bf755e3d7c5152947abc149bc20189")
+    public_key = PublicKey("ed25519/acdd6d5b53bfee478bf689f8e012fe7988bf755e3d7c5152947abc149bc20189")
 
     token = Biscuit.from_base64("Ep8BCjUKB3VzZXJfaWQKBWFsaWNlCgVmaWxlMRgDIgoKCAiACBIDGIEIIg4KDAgHEgMYgQgSAxiCCBIkCAASINFHns5iUW6aZiXA0GoqXyrpvFXrquiRGBZjPy3VJPoHGkAC0oew5bIngBkvg1FThYPBf30CAOBksyofzweJnmT_sQ5N4yT1xevHLImmPkJDFyJs9VXrQtroGy_UY5z3WREIGsgBCl4KATAKATEYAyouCgsIBBIDCIMIEgIYABIHCAISAwiDCBIICIAIEgMIhAgSDAgHEgMIhAgSAwiDCDIkCiIKAggbEgcIAhIDCIMIEgYIAxICGAASCwgEEgMIgwgSAhgAEiQIABIg2QCord1Cw30xC2Oea3AuAOPZ2Mvm9-EQmV3zN7zXwQEaQCLnXqIAz3srYrOJKY_g3slzt_nH5U52w8QYEdcuqCxoInvJB5t9BZht4X75MBzM3Aj1AjRVOGmH0ebuQ5GxnwYagwEKGQoFZmlsZTIYAyIOCgwIBxIDGIEIEgMYhQgSJAgAEiAMOoeV68xL1RTh_y4VeK3DUDBP_gnlPSsckzo87Pf7ihpAFAo2Mf7K5VC1HlC5uCK5R_tIXIAHCzRIL6EWzepWAUAWSh0KlZtA_tinJ-L2LAtXY1dgxIjIvw7agO5ZFVjECSIiCiBuSznFYC0NJn8VmDlZmiq1GpBSOERAwHjLZoQJG_24NA==", public_key)
     utoken = UnverifiedBiscuit.from_base64("Ep8BCjUKB3VzZXJfaWQKBWFsaWNlCgVmaWxlMRgDIgoKCAiACBIDGIEIIg4KDAgHEgMYgQgSAxiCCBIkCAASINFHns5iUW6aZiXA0GoqXyrpvFXrquiRGBZjPy3VJPoHGkAC0oew5bIngBkvg1FThYPBf30CAOBksyofzweJnmT_sQ5N4yT1xevHLImmPkJDFyJs9VXrQtroGy_UY5z3WREIGsgBCl4KATAKATEYAyouCgsIBBIDCIMIEgIYABIHCAISAwiDCBIICIAIEgMIhAgSDAgHEgMIhAgSAwiDCDIkCiIKAggbEgcIAhIDCIMIEgYIAxICGAASCwgEEgMIgwgSAhgAEiQIABIg2QCord1Cw30xC2Oea3AuAOPZ2Mvm9-EQmV3zN7zXwQEaQCLnXqIAz3srYrOJKY_g3slzt_nH5U52w8QYEdcuqCxoInvJB5t9BZht4X75MBzM3Aj1AjRVOGmH0ebuQ5GxnwYagwEKGQoFZmlsZTIYAyIOCgwIBxIDGIEIEgMYhQgSJAgAEiAMOoeV68xL1RTh_y4VeK3DUDBP_gnlPSsckzo87Pf7ihpAFAo2Mf7K5VC1HlC5uCK5R_tIXIAHCzRIL6EWzepWAUAWSh0KlZtA_tinJ-L2LAtXY1dgxIjIvw7agO5ZFVjECSIiCiBuSznFYC0NJn8VmDlZmiq1GpBSOERAwHjLZoQJG_24NA==")
@@ -408,7 +408,7 @@ def test_biscuit_revocation_ids():
     ]
 
 def test_unverified_biscuit_signature_check():
-    public_key = PublicKey.from_hex("acdd6d5b53bfee478bf689f8e012fe7988bf755e3d7c5152947abc149bc20189")
+    public_key = PublicKey("ed25519/acdd6d5b53bfee478bf689f8e012fe7988bf755e3d7c5152947abc149bc20189")
 
     utoken = UnverifiedBiscuit.from_base64("Ep8BCjUKB3VzZXJfaWQKBWFsaWNlCgVmaWxlMRgDIgoKCAiACBIDGIEIIg4KDAgHEgMYgQgSAxiCCBIkCAASINFHns5iUW6aZiXA0GoqXyrpvFXrquiRGBZjPy3VJPoHGkAC0oew5bIngBkvg1FThYPBf30CAOBksyofzweJnmT_sQ5N4yT1xevHLImmPkJDFyJs9VXrQtroGy_UY5z3WREIGsgBCl4KATAKATEYAyouCgsIBBIDCIMIEgIYABIHCAISAwiDCBIICIAIEgMIhAgSDAgHEgMIhAgSAwiDCDIkCiIKAggbEgcIAhIDCIMIEgYIAxICGAASCwgEEgMIgwgSAhgAEiQIABIg2QCord1Cw30xC2Oea3AuAOPZ2Mvm9-EQmV3zN7zXwQEaQCLnXqIAz3srYrOJKY_g3slzt_nH5U52w8QYEdcuqCxoInvJB5t9BZht4X75MBzM3Aj1AjRVOGmH0ebuQ5GxnwYagwEKGQoFZmlsZTIYAyIOCgwIBxIDGIEIEgMYhQgSJAgAEiAMOoeV68xL1RTh_y4VeK3DUDBP_gnlPSsckzo87Pf7ihpAFAo2Mf7K5VC1HlC5uCK5R_tIXIAHCzRIL6EWzepWAUAWSh0KlZtA_tinJ-L2LAtXY1dgxIjIvw7agO5ZFVjECSIiCiBuSznFYC0NJn8VmDlZmiq1GpBSOERAwHjLZoQJG_24NA==")
 
@@ -423,13 +423,13 @@ def test_append_on_unverified():
 
 def test_keypair_from_private_key_der():
     private_key_der = bytes.fromhex("302e020100300506032b6570042204200499694d0da05dcac40052663e71d50c1539465f8926dfe92033cf7aaad53d65")
-    private_key_hex = "0499694d0da05dcac40052663e71d50c1539465f8926dfe92033cf7aaad53d65"
-    kp = KeyPair.from_private_key_der(der=private_key_der)
-    assert kp.private_key.to_hex() == private_key_hex
+    private_key_hex = "ed25519-private/0499694d0da05dcac40052663e71d50c1539465f8926dfe92033cf7aaad53d65"
+    kp = KeyPair.from_private_key(PrivateKey.from_der(der=private_key_der))
+    assert repr(kp.private_key) == private_key_hex
 
 
 def test_keypair_from_private_key_pem():
     private_key_pem = "-----BEGIN PRIVATE KEY-----\nMC4CAQAwBQYDK2VwBCIEIASZaU0NoF3KxABSZj5x1QwVOUZfiSbf6SAzz3qq1T1l\n-----END PRIVATE KEY-----"
-    private_key_hex = "0499694d0da05dcac40052663e71d50c1539465f8926dfe92033cf7aaad53d65"
-    kp = KeyPair.from_private_key_pem(pem=private_key_pem)
-    assert kp.private_key.to_hex() == private_key_hex
+    private_key_hex = "ed25519-private/0499694d0da05dcac40052663e71d50c1539465f8926dfe92033cf7aaad53d65"
+    kp = KeyPair.from_private_key(PrivateKey.from_pem(pem=private_key_pem))
+    assert repr(kp.private_key) == private_key_hex
