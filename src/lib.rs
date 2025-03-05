@@ -3,6 +3,7 @@
 #![allow(unexpected_cfgs)]
 #![allow(clippy::useless_conversion)]
 use ::biscuit_auth::builder::MapKey;
+use ::biscuit_auth::datalog::ExternFunc;
 use ::biscuit_auth::AuthorizerBuilder;
 use ::biscuit_auth::RootKeyProvider;
 use ::biscuit_auth::UnverifiedBiscuit;
@@ -14,6 +15,7 @@ use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::ops::Deref;
 use std::str::FromStr;
+use std::sync::Arc;
 
 use ::biscuit_auth::{
     builder, error, Authorizer, AuthorizerLimits, Biscuit, KeyPair, PrivateKey, PublicKey,
@@ -628,6 +630,57 @@ impl PyAuthorizerBuilder {
         Ok(())
     }
 
+    pub fn register_extern_func(&mut self, name: &str, func: PyObject) -> PyResult<()> {
+        self.0 = Some(
+            self.0
+                .take()
+                .expect("builder already consumed")
+                .register_extern_func(
+                    name.to_string(),
+                    ExternFunc::new(Arc::new(move |left, right| {
+                        Python::with_gil(|py| {
+                            let bound = func.bind(py);
+                            if bound.is_callable() {
+                                let left = term_to_py(&left).map_err(|e| e.to_string())?;
+                                let result = match right {
+                                    Some(right) => {
+                                        let right =
+                                            term_to_py(&right).map_err(|e| e.to_string())?;
+                                        bound.call1((left, right)).map_err(|e| e.to_string())?
+                                    }
+                                    None => bound.call1((left,)).map_err(|e| e.to_string())?,
+                                };
+                                let py_result: PyTerm =
+                                    result.extract().map_err(|e| e.to_string())?;
+                                Ok(py_result.to_term().map_err(|e| e.to_string())?)
+                            } else {
+                                Err("expected a function".to_string())
+                            }
+                        })
+                    })),
+                ),
+        );
+        Ok(())
+    }
+
+    pub fn register_extern_funcs(&mut self, funcs: HashMap<String, PyObject>) -> PyResult<()> {
+        for (name, func) in funcs {
+            self.register_extern_func(&name, func)?;
+        }
+
+        Ok(())
+    }
+
+    pub fn set_extern_funcs(&mut self, funcs: HashMap<String, PyObject>) -> PyResult<()> {
+        self.0 = Some(
+            self.0
+                .take()
+                .expect("builder already consumed")
+                .set_extern_funcs(HashMap::new()),
+        );
+        self.register_extern_funcs(funcs)
+    }
+
     /// Take a snapshot of the authorizer builder and return it, base64-encoded
     ///
     /// :return: a snapshot as a base64-encoded string
@@ -692,6 +745,16 @@ impl PyAuthorizerBuilder {
                 .clone()
                 .expect("builder already consumed")
                 .build(&token.0)
+                .map_err(|e| BiscuitValidationError::new_err(e.to_string()))?,
+        ))
+    }
+
+    pub fn build_unauthenticated(&self) -> PyResult<PyAuthorizer> {
+        Ok(PyAuthorizer(
+            self.0
+                .clone()
+                .expect("builder already consumed")
+                .build_unauthenticated()
                 .map_err(|e| BiscuitValidationError::new_err(e.to_string()))?,
         ))
     }
@@ -1173,6 +1236,17 @@ fn inner_term_to_py(t: &builder::Term, py: Python<'_>) -> PyResult<Py<PyAny>> {
     }
 }
 
+fn term_to_py(t: &builder::Term) -> PyResult<Py<PyAny>> {
+    Python::with_gil(|py| match t {
+        builder::Term::Parameter(_) => Err(DataLogError::new_err("Invalid term value".to_string())),
+        builder::Term::Variable(_) => Err(DataLogError::new_err("Invalid term value".to_string())),
+        builder::Term::Set(_vs) => todo!(),
+        builder::Term::Array(_vs) => todo!(),
+        builder::Term::Map(_vs) => todo!(),
+        term => inner_term_to_py(term, py),
+    })
+}
+
 /// Wrapper for a non-naïve python date
 #[derive(FromPyObject)]
 pub struct PyDate(Py<PyDateTime>);
@@ -1291,25 +1365,7 @@ impl PyFact {
     /// The fact terms
     #[getter]
     pub fn terms(&self) -> PyResult<Vec<PyObject>> {
-        self.0
-            .predicate
-            .terms
-            .iter()
-            .map(|t| {
-                Python::with_gil(|py| match t {
-                    builder::Term::Parameter(_) => {
-                        Err(DataLogError::new_err("Invalid term value".to_string()))
-                    }
-                    builder::Term::Variable(_) => {
-                        Err(DataLogError::new_err("Invalid term value".to_string()))
-                    }
-                    builder::Term::Set(_vs) => todo!(),
-                    builder::Term::Array(_vs) => todo!(),
-                    builder::Term::Map(_vs) => todo!(),
-                    term => inner_term_to_py(term, py),
-                })
-            })
-            .collect()
+        self.0.predicate.terms.iter().map(term_to_py).collect()
     }
 
     fn __repr__(&self) -> String {

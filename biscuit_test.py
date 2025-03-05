@@ -448,3 +448,22 @@ def test_keypair_from_private_key_pem():
     private_key_hex = "ed25519-private/0499694d0da05dcac40052663e71d50c1539465f8926dfe92033cf7aaad53d65"
     kp = KeyPair.from_private_key(PrivateKey.from_pem(pem=private_key_pem))
     assert repr(kp.private_key) == private_key_hex
+
+def test_extern_func():
+    def test(left, right):
+        if left == right:
+            return True
+        else:
+            return False
+
+    authorizer = AuthorizerBuilder("""
+    check if 2.extern::other();
+    allow if 1.extern::test(1);
+    """)
+    authorizer.register_extern_funcs({
+      'test': test,
+      'other': lambda x : x == 2,
+    })
+    policy = authorizer.build_unauthenticated().authorize()
+    assert policy == 0
+
