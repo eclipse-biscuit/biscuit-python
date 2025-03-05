@@ -2,7 +2,7 @@ Basic use
 =========
 
 
->>> from biscuit_auth import Authorizer, Biscuit, BiscuitBuilder, BlockBuilder, KeyPair, PrivateKey, PublicKey, Rule, UnverifiedBiscuit
+>>> from biscuit_auth import Authorizer, AuthorizerBuilder, Biscuit, BiscuitBuilder, BlockBuilder, KeyPair, PrivateKey, PublicKey, Rule, UnverifiedBiscuit
 >>> from datetime import datetime, timedelta, timezone
 
 Create and manage keypairs
@@ -72,8 +72,7 @@ Parse and authorize a biscuit token
 
 >>> public_key = PublicKey.from_hex("9e124fbb46ff99a87219aef4b09f4f6c3b7fd96b7bd279e38af3ef429a101c69")
 >>> token = Biscuit.from_base64("En0KEwoEMTIzNBgDIgkKBwgKEgMYgAgSJAgAEiCp8D9laR_CXmFmiUlo6zi8L63iapXDxX1evELp4HVaBRpAx3Mkwu2f2AcNq48IZwu-pxACq1stL76DSMGEugmiduuTVwMqLmgKZ4VFgzeydCrYY_Id3MkxgTgjXzEHUH4DDSIiCiB55I7ykL9wQXHRDqUnSgZwCdYNdO7c8LZEj0VH5sy3-Q==", public_key)
->>> authorizer = Authorizer( """ time({now}); allow if user($u); """, { 'now': datetime.now(tz = timezone.utc)} )
->>> authorizer.add_token(token)
+>>> authorizer = AuthorizerBuilder( """ time({now}); allow if user($u); """, { 'now': datetime.now(tz = timezone.utc)} ).build(token)
 >>> authorizer.authorize()
 0
 
@@ -87,8 +86,7 @@ In order to help with key rotation, biscuit tokens can optionally carry a root k
 ...   else:
 ...     raise Exception("unknown key identifier")
 >>> token = Biscuit.from_base64("CAESfQoTCgQxMjM0GAMiCQoHCAoSAxiACBIkCAASII5WVsvM52T91C12wnzButmyzmtGSX_rbM6hCSIJihX2GkDwAcVxTnY8aeMLm-i2R_VzTfIMQZya49ogXO2h2Fg2TJsDcG3udIki9il5PA05lKUwrfPNroS7Qg5e04AyLLcHIiIKII5rh75jrCrgE6Rzw6GVYczMn1IOo287uO4Ef5wp7obY", public_key_fn)
->>> authorizer = Authorizer( """ time({now}); allow if user($u); """, { 'now': datetime.now(tz = timezone.utc)} )
->>> authorizer.add_token(token)
+>>> authorizer = AuthorizerBuilder( """ time({now}); allow if user($u); """, { 'now': datetime.now(tz = timezone.utc)} ).build(token)
 >>> authorizer.authorize()
 0
 

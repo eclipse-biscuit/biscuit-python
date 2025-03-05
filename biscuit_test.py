@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from biscuit_auth import KeyPair,Authorizer, Biscuit, BiscuitBuilder, BlockBuilder, Check, Fact, KeyPair, Policy, PrivateKey, PublicKey, Rule, UnverifiedBiscuit
+from biscuit_auth import KeyPair, Authorizer, AuthorizerBuilder, Biscuit, BiscuitBuilder, BlockBuilder, Check, Fact, KeyPair, Policy, PrivateKey, PublicKey, Rule, UnverifiedBiscuit
 
 def test_fact():
     fact = Fact('fact(1, true, "", "Test", hex:aabbcc, 2023-04-29T01:00:00Z)')
@@ -57,7 +57,7 @@ int(1);
 bool(true);
 bytes(hex:aabb);
 datetime(2023-04-03T10:00:00Z);
-set([2, "Test", 2023-04-29T01:00:00Z, true]);
+set({2, "Test", 2023-04-29T01:00:00Z, true});
 fact(false);
 fact(true);
 builder(true);
@@ -129,7 +129,7 @@ check if add_code(true, true) trusting ed25519/acdd6d5b53bfee478bf689f8e012fe798
 
 def test_authorizer_builder():
     pubkey = PublicKey.from_hex("acdd6d5b53bfee478bf689f8e012fe7988bf755e3d7c5152947abc149bc20189")
-    builder = Authorizer(
+    builder = AuthorizerBuilder(
       """
         string({str});
         int({int});
@@ -162,43 +162,28 @@ def test_authorizer_builder():
     builder.add_policy(Policy("allow if fact($var, {f})", { 'f': True}))
     builder.add_policy(Policy("allow if fact($var, {f}) trusting {pubkey}", { 'f': True}, { 'pubkey': pubkey }))
     builder.merge_block(BlockBuilder('builder(true);'))
-    builder.merge(Authorizer('builder(false);'))
+    builder.merge(AuthorizerBuilder('builder(false);'))
     builder.add_code("add_code(true);")
     builder.add_code("add_code(true, {f});", { 'f': True})
     builder.add_code("check if add_code(true, {f}) trusting {pubkey};", { 'f': True}, { 'pubkey': pubkey })
 
-    try:
-        builder.authorize()
-    except:
-        pass
-
-    assert repr(builder) == """// Facts:
-// origin: authorizer
-add_code(true);
-add_code(true, true);
+    assert repr(builder) == """string("1234");
+int(1);
 bool(true);
-builder(false);
-builder(true);
 bytes(hex:aabb);
 datetime(2023-04-03T10:00:00Z);
 fact(false);
 fact(true);
-int(1);
-string("1234");
-
-// Rules:
-// origin: authorizer
+builder(true);
+builder(false);
+add_code(true);
+add_code(true, true);
 head($var) <- fact($var, true);
 head($var) <- fact($var, true) trusting ed25519/acdd6d5b53bfee478bf689f8e012fe7988bf755e3d7c5152947abc149bc20189;
-
-// Checks:
-// origin: authorizer
 check if true trusting ed25519/acdd6d5b53bfee478bf689f8e012fe7988bf755e3d7c5152947abc149bc20189;
 check if fact($var, true);
 check if fact($var, true) trusting ed25519/acdd6d5b53bfee478bf689f8e012fe7988bf755e3d7c5152947abc149bc20189;
 check if add_code(true, true) trusting ed25519/acdd6d5b53bfee478bf689f8e012fe7988bf755e3d7c5152947abc149bc20189;
-
-// Policies:
 allow if true;
 allow if true trusting ed25519/acdd6d5b53bfee478bf689f8e012fe7988bf755e3d7c5152947abc149bc20189;
 allow if fact($var, true);
@@ -207,7 +192,7 @@ allow if fact($var, true) trusting ed25519/acdd6d5b53bfee478bf689f8e012fe7988bf7
 
 
 def test_authorizer_limits():
-    auth = Authorizer("")
+    auth = AuthorizerBuilder()
     limits = auth.limits()
     limits.max_time = timedelta(microseconds=2000)
     auth.set_limits(limits)
@@ -259,10 +244,10 @@ def test_complete_lifecycle():
 
     parsedToken = Biscuit.from_base64(token, root.public_key)
 
-    authorizer = Authorizer("allow if user({id})", { 'id': "1234" })
+    authorizer = AuthorizerBuilder("allow if user({id})", { 'id': "1234" })
 
     print(authorizer)
-    authorizer.add_token(parsedToken)
+    authorizer = authorizer.build(parsedToken)
 
     policy = authorizer.authorize()
 
@@ -288,10 +273,10 @@ def test_snapshot():
 
     parsedToken = Biscuit.from_base64(token, root.public_key)
 
-    authorizer = Authorizer("allow if user({id})", { 'id': "1234" })
+    authorizer = AuthorizerBuilder("allow if user({id})", { 'id': "1234" })
 
     print(authorizer)
-    authorizer.add_token(parsedToken)
+    authorizer = authorizer.build(parsedToken)
 
     snapshot = authorizer.base64_snapshot()
     parsed = Authorizer.from_base64_snapshot(snapshot)
