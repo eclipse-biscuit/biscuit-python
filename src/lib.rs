@@ -486,6 +486,11 @@ impl PyAuthorizer {
         })
     }
 
+    /// adds a fact `time($current_time)` with the current time
+    pub fn set_time(&mut self) {
+        self.0.set_time();
+    }
+
     /// Merge another `Authorizer` in this `Authorizer`. The `Authorizer` argument will not be modified
     ///
     /// :param builder: an Authorizer
