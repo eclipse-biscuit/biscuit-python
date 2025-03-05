@@ -179,7 +179,7 @@ class Biscuit:
     @property
     def revocation_ids(self) -> List[str]: ...
 
-class Authorizer:
+class AuthorizerBuilder:
     # Create a new authorizer from a datalog snippet and optional parameter values
     #
     # :param source: a datalog snippet
@@ -193,7 +193,7 @@ class Authorizer:
         source: Optional[str] = None,
         parameters: Parameters = None,
         scope_parameters: ScopeParameters = None,
-    ) -> Authorizer: ...
+    ) -> AuthorizerBuilder: ...
 
     # Add code to the builder, using the provided parameters.
     #
@@ -254,8 +254,9 @@ class Authorizer:
     #
     # :param token: the token to authorize
     # :type token: Biscuit
-    def add_token(self, token: Biscuit) -> None: ...
+    def build(self, token: Biscuit) -> Authorizer: ...
 
+class Authorizer:
     # Runs the authorization checks and policies
     #
     # Returns the index of the matching allow policy, or an error containing the matching deny
