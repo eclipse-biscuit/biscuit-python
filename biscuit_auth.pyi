@@ -253,6 +253,36 @@ class AuthorizerBuilder:
     # :type builder: BlockBuilder
     def merge_block(self, builder: BlockBuilder) -> None: ...
 
+    # Take a snapshot of the authorizer builder and return it, base64-encoded
+    #
+    # :return: a snapshot as a base64-encoded string
+    # :rtype: str
+    def base64_snapshot(self) -> str: ...
+
+    # Take a snapshot of the authorizer builder and return it, as raw bytes
+    #
+    # :return: a snapshot as raw bytes
+    # :rtype: bytes
+    def raw_snapshot(self) -> bytes: ...
+
+    # Build an authorizer builder from a base64-encoded snapshot
+    #
+    # :param input: base64-encoded snapshot
+    # :type input: str
+    # :return: the authorizer builder
+    # :rtype: AuthorizerBuilder
+    @classmethod
+    def from_base64_snapshot(cls, input: str) -> AuthorizerBuilder: ...
+
+    # Build an authorizer builder from a snapshot's raw bytes
+    #
+    # :param input: raw snapshot bytes
+    # :type input: bytes
+    # :return: the authorizer builder
+    # :rtype: AuthorizerBuilder
+    @classmethod
+    def from_raw_snapshot(cls, input: bytes) -> AuthorizerBuilder: ...
+
     # Add a `Biscuit` to this `Authorizer`
     #
     # :param token: the token to authorize

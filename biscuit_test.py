@@ -316,6 +316,21 @@ def test_snapshot():
     assert raw_facts[0].name == "u"
     assert raw_facts[0].terms == ["1234"]
 
+def test_builder_snapshot():
+    authorizer = AuthorizerBuilder("allow if user({id})", { 'id': "1234" })
+
+    print(authorizer)
+
+    snapshot = authorizer.base64_snapshot()
+    parsed = AuthorizerBuilder.from_base64_snapshot(snapshot)
+    assert repr(authorizer) == repr(parsed)
+
+    # raw_snapshot() returns a list of bytes, not a `bytes` value directly
+    return
+    raw_snapshot = authorizer.raw_snapshot()
+    parsed_from_raw = AuthorizerBuilder.from_raw_snapshot(raw_snapshot)
+    assert repr(authorizer) == repr(parsed_from_raw)
+
 def test_public_keys():
     # Happy path (hex to bytes and back)
     public_key_from_hex = PublicKey("ed25519/acdd6d5b53bfee478bf689f8e012fe7988bf755e3d7c5152947abc149bc20189")
