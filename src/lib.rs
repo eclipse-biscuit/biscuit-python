@@ -13,6 +13,7 @@ use chrono::Utc;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::ops::Deref;
+use std::str::FromStr;
 
 use ::biscuit_auth::{
     builder, error, Authorizer, AuthorizerLimits, Biscuit, KeyPair, PrivateKey, PublicKey,
@@ -50,6 +51,30 @@ create_exception!(
     BiscuitBlockError,
     pyo3::exceptions::PyException
 );
+
+#[pyclass(eq, eq_int, name = "Algorithm")]
+#[derive(PartialEq, Eq, Clone, Copy)]
+pub enum PyAlgorithm {
+    Ed25519,
+    Secp256r1,
+}
+
+impl From<builder::Algorithm> for PyAlgorithm {
+    fn from(value: builder::Algorithm) -> Self {
+        match value {
+            builder::Algorithm::Ed25519 => Self::Ed25519,
+            builder::Algorithm::Secp256r1 => Self::Secp256r1,
+        }
+    }
+}
+impl From<PyAlgorithm> for builder::Algorithm {
+    fn from(value: PyAlgorithm) -> Self {
+        match value {
+            PyAlgorithm::Ed25519 => Self::Ed25519,
+            PyAlgorithm::Secp256r1 => Self::Secp256r1,
+        }
+    }
+}
 
 struct PyKeyProvider {
     py_value: PyObject,
@@ -898,32 +923,6 @@ impl PyKeyPair {
         PyKeyPair(KeyPair::from(&private_key.0))
     }
 
-    /// Generate a keypair from a DER buffer
-    ///
-    /// :param bytes: private key bytes in DER format
-    /// :type private_key: PrivateKey
-    /// :return: the corresponding keypair
-    /// :rtype: KeyPair
-    #[classmethod]
-    pub fn from_private_key_der(_: &Bound<PyType>, der: &[u8]) -> PyResult<Self> {
-        let kp = KeyPair::from_private_key_der(der)
-            .map_err(|e: error::Format| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
-        Ok(PyKeyPair(kp))
-    }
-
-    /// Generate a keypair from a PEM buffer
-    ///
-    /// :param bytes: private key bytes in PEM format
-    /// :type private_key: PrivateKey
-    /// :return: the corresponding keypair
-    /// :rtype: KeyPair
-    #[classmethod]
-    pub fn from_private_key_pem(_: &Bound<PyType>, pem: &str) -> PyResult<Self> {
-        let kp = KeyPair::from_private_key_pem(pem)
-            .map_err(|e: error::Format| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
-        Ok(PyKeyPair(kp))
-    }
-
     /// The public key part
     #[getter]
     pub fn public_key(&self) -> PyPublicKey {
@@ -962,8 +961,8 @@ impl PyPublicKey {
     ///
     /// :return: the public key bytes (hex-encoded)
     /// :rtype: str
-    pub fn to_hex(&self) -> String {
-        hex::encode(self.0.to_bytes())
+    fn __repr__(&self) -> String {
+        self.0.to_string()
     }
 
     /// Deserializes a public key from raw bytes
@@ -973,9 +972,8 @@ impl PyPublicKey {
     /// :return: the public key
     /// :rtype: PublicKey
     #[classmethod]
-    pub fn from_bytes(_: &Bound<PyType>, data: &[u8]) -> PyResult<PyPublicKey> {
-        match PublicKey::from_bytes(data, builder::Algorithm::Ed25519) {
-            // TODO
+    pub fn from_bytes(_: &Bound<PyType>, data: &[u8], alg: &PyAlgorithm) -> PyResult<PyPublicKey> {
+        match PublicKey::from_bytes(data, builder::Algorithm::from(*alg)) {
             Ok(key) => Ok(PyPublicKey(key)),
             Err(error) => Err(PyValueError::new_err(error.to_string())),
         }
@@ -987,14 +985,37 @@ impl PyPublicKey {
     /// :type data: str
     /// :return: the public key
     /// :rtype: PublicKey
+    #[new]
+    pub fn new(data: &str) -> PyResult<PyPublicKey> {
+        match PublicKey::from_str(data) {
+            Ok(key) => Ok(PyPublicKey(key)),
+            Err(error) => Err(PyValueError::new_err(error.to_string())),
+        }
+    }
+
+    /// Deserializes a public key from a der buffer
+    ///
+    /// :param der: the der buffer
+    /// :type der: bytes
+    /// :return: the public key
+    /// :rtype: PublicKey
     #[classmethod]
-    pub fn from_hex(_: &Bound<PyType>, data: &str) -> PyResult<PyPublicKey> {
-        let data = match hex::decode(data) {
-            Ok(data) => data,
-            Err(error) => return Err(PyValueError::new_err(error.to_string())),
-        };
-        match PublicKey::from_bytes(&data, builder::Algorithm::Ed25519) {
-            // TODO
+    pub fn from_der(_: &Bound<PyType>, der: &[u8]) -> PyResult<Self> {
+        match PublicKey::from_der(der) {
+            Ok(key) => Ok(PyPublicKey(key)),
+            Err(error) => Err(PyValueError::new_err(error.to_string())),
+        }
+    }
+
+    /// Deserializes a public key from a PEM string
+    ///
+    /// :param data: the der buffer
+    /// :type pem: string
+    /// :return: the public key
+    /// :rtype: PublicKey
+    #[classmethod]
+    pub fn from_pem(_: &Bound<PyType>, pem: &str) -> PyResult<Self> {
+        match PublicKey::from_pem(pem) {
             Ok(key) => Ok(PyPublicKey(key)),
             Err(error) => Err(PyValueError::new_err(error.to_string())),
         }
@@ -1020,8 +1041,8 @@ impl PyPrivateKey {
     ///
     /// :return: the private key bytes (hex-encoded)
     /// :rtype: str
-    pub fn to_hex(&self) -> String {
-        hex::encode(self.0.to_bytes())
+    fn __repr__(&self) -> String {
+        self.0.to_prefixed_string()
     }
 
     /// Deserializes a private key from raw bytes
@@ -1031,8 +1052,8 @@ impl PyPrivateKey {
     /// :return: the private key
     /// :rtype: PrivateKey
     #[classmethod]
-    pub fn from_bytes(_: &Bound<PyType>, data: &[u8]) -> PyResult<PyPrivateKey> {
-        match PrivateKey::from_bytes(data, builder::Algorithm::Ed25519) {
+    pub fn from_bytes(_: &Bound<PyType>, data: &[u8], alg: &PyAlgorithm) -> PyResult<PyPrivateKey> {
+        match PrivateKey::from_bytes(data, builder::Algorithm::from(*alg)) {
             // TODO
             Ok(key) => Ok(PyPrivateKey(key)),
             Err(error) => Err(PyValueError::new_err(error.to_string())),
@@ -1045,14 +1066,37 @@ impl PyPrivateKey {
     /// :type data: str
     /// :return: the private key
     /// :rtype: PrivateKey
+    #[new]
+    pub fn new(data: &str) -> PyResult<PyPrivateKey> {
+        match PrivateKey::from_str(data) {
+            Ok(key) => Ok(PyPrivateKey(key)),
+            Err(error) => Err(PyValueError::new_err(error.to_string())),
+        }
+    }
+
+    /// Deserializes a private key from a der buffer
+    ///
+    /// :param der: the der buffer
+    /// :type der: bytes
+    /// :return: the Private key
+    /// :rtype: PrivateKey
     #[classmethod]
-    pub fn from_hex(_: &Bound<PyType>, data: &str) -> PyResult<PyPrivateKey> {
-        let data = match hex::decode(data) {
-            Ok(data) => data,
-            Err(error) => return Err(PyValueError::new_err(error.to_string())),
-        };
-        match PrivateKey::from_bytes(&data, builder::Algorithm::Ed25519) {
-            // TODO
+    pub fn from_der(_: &Bound<PyType>, der: &[u8]) -> PyResult<Self> {
+        match PrivateKey::from_der(der) {
+            Ok(key) => Ok(PyPrivateKey(key)),
+            Err(error) => Err(PyValueError::new_err(error.to_string())),
+        }
+    }
+
+    /// Deserializes a private key from a PEM string
+    ///
+    /// :param data: the der buffer
+    /// :type pem: string
+    /// :return: the Private key
+    /// :rtype: PrivateKey
+    #[classmethod]
+    pub fn from_pem(_: &Bound<PyType>, pem: &str) -> PyResult<Self> {
+        match PrivateKey::from_pem(pem) {
             Ok(key) => Ok(PyPrivateKey(key)),
             Err(error) => Err(PyValueError::new_err(error.to_string())),
         }
@@ -1466,6 +1510,7 @@ pub fn biscuit_auth(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<PyCheck>()?;
     m.add_class::<PyPolicy>()?;
     m.add_class::<PyUnverifiedBiscuit>()?;
+    m.add_class::<PyAlgorithm>()?;
 
     m.add("DataLogError", py.get_type_bound::<DataLogError>())?;
     m.add(

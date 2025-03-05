@@ -33,6 +33,9 @@ PublicKeyProvider: TypeAlias = Union[
     Callable[[], PublicKey], Callable[[int], PublicKey]
 ]
 
+class Algorithm:
+    pass
+
 class BiscuitBuilder:
     # Create a builder from a datalog snippet and optional parameter values
     #
@@ -406,12 +409,6 @@ class PublicKey:
     # :rtype: list
     def to_bytes(self) -> bytes: ...
 
-    # Serializes a public key to a hexadecimal string
-    #
-    # :return: the public key bytes (hex-encoded)
-    # :rtype: str
-    def to_hex(self) -> str: ...
-
     # Deserializes a public key from raw bytes
     #
     # :param data: the raw bytes
@@ -428,7 +425,7 @@ class PublicKey:
     # :return: the public key
     # :rtype: PublicKey
     @classmethod
-    def from_hex(cls, data: str) -> PublicKey: ...
+    def __new__(cls, data: str) -> PublicKey: ...
 
 # ed25519 private key
 class PrivateKey:
@@ -437,12 +434,6 @@ class PrivateKey:
     # :return: the public key bytes
     # :rtype: list
     def to_bytes(self) -> bytes: ...
-
-    # Serializes a private key to a hexadecimal string
-    #
-    # :return: the private key bytes (hex-encoded)
-    # :rtype: str
-    def to_hex(self) -> str: ...
 
     # Deserializes a private key from raw bytes
     #
@@ -460,7 +451,7 @@ class PrivateKey:
     # :return: the private key
     # :rtype: PrivateKey
     @classmethod
-    def from_hex(cls, data: str) -> PrivateKey: ...
+    def __new__(cls, data: str) -> PrivateKey: ...
 
 # A single datalog Fact
 #
