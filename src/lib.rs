@@ -2,6 +2,7 @@
 #![allow(clippy::borrow_deref_ref)]
 #![allow(unexpected_cfgs)]
 #![allow(clippy::useless_conversion)]
+use ::biscuit_auth::builder::MapKey;
 use ::biscuit_auth::AuthorizerBuilder;
 use ::biscuit_auth::RootKeyProvider;
 use ::biscuit_auth::UnverifiedBiscuit;
@@ -1108,6 +1109,9 @@ impl Ord for PyDate {
 pub enum PyTerm {
     Simple(NestedPyTerm),
     Set(BTreeSet<NestedPyTerm>),
+    Array(Vec<PyTerm>),
+    StrDict(HashMap<String, PyTerm>),
+    IntDict(HashMap<i64, PyTerm>),
 }
 
 impl NestedPyTerm {
@@ -1139,6 +1143,21 @@ impl PyTerm {
                 .map(|s| s.to_term())
                 .collect::<PyResult<_>>()
                 .map(builder::Term::Set),
+            PyTerm::Array(vs) => vs
+                .iter()
+                .map(|s| s.to_term())
+                .collect::<PyResult<_>>()
+                .map(builder::Term::Array),
+            PyTerm::StrDict(vs) => vs
+                .iter()
+                .map(|(k, v)| Ok((MapKey::Str(k.to_string()), v.to_term()?)))
+                .collect::<PyResult<_>>()
+                .map(builder::Term::Map),
+            PyTerm::IntDict(vs) => vs
+                .iter()
+                .map(|(k, v)| Ok((MapKey::Integer(*k), v.to_term()?)))
+                .collect::<PyResult<_>>()
+                .map(builder::Term::Map),
         }
     }
 }
@@ -1192,6 +1211,8 @@ impl PyFact {
                         Err(DataLogError::new_err("Invalid term value".to_string()))
                     }
                     builder::Term::Set(_vs) => todo!(),
+                    builder::Term::Array(_vs) => todo!(),
+                    builder::Term::Map(_vs) => todo!(),
                     term => inner_term_to_py(term, py),
                 })
             })

@@ -23,6 +23,8 @@ def test_biscuit_builder():
         bytes({bytes});
         datetime({datetime});
         set({set});
+        array({array});
+        map({map});
         check if true trusting {pubkey};
       """,
       { 'str': "1234",
@@ -31,6 +33,8 @@ def test_biscuit_builder():
         'bytes': [0xaa, 0xbb],
         'datetime': datetime(2023, 4, 3, 10, 0, 0, tzinfo = timezone.utc),
         'set': {2, True, "Test", datetime(2023, 4, 29, 1, 0, 0, tzinfo = timezone.utc) },
+        'array': [2, True, "Test", ["inner"]],
+        'map': { 'key': [{12: "value"}]}
       },
       { 'pubkey': pubkey }
     )
@@ -58,6 +62,8 @@ bool(true);
 bytes(hex:aabb);
 datetime(2023-04-03T10:00:00Z);
 set({2, "Test", 2023-04-29T01:00:00Z, true});
+array([2, true, "Test", ["inner"]]);
+map({"key": [{12: "value"}]});
 fact(false);
 fact(true);
 builder(true);
