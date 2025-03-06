@@ -25,7 +25,7 @@ head($u, "abcd") <- body($u), $u == "abcd"
 ... check if right($r), {rights}.contains($r);
 ... """, {'rights': {'read', 'write'}})
 // no root key id set
-check if right($r), ["read", "write"].contains($r);
+check if right($r), {"read", "write"}.contains($r);
 <BLANKLINE>
 
 Rules, checks and policies can also contain parameters for public keys. Those are specified in a separate dictionnary:
@@ -34,7 +34,7 @@ Rules, checks and policies can also contain parameters for public keys. Those ar
 ... check if admin({user}) trusting {rights_service_pubkey}
 ... """,
 ... {'user': "abcd" },
-... {'rights_service_pubkey': PublicKey.from_hex("9e124fbb46ff99a87219aef4b09f4f6c3b7fd96b7bd279e38af3ef429a101c69") })
+... {'rights_service_pubkey': PublicKey("ed25519/9e124fbb46ff99a87219aef4b09f4f6c3b7fd96b7bd279e38af3ef429a101c69") })
 check if admin("abcd") trusting ed25519/9e124fbb46ff99a87219aef4b09f4f6c3b7fd96b7bd279e38af3ef429a101c69;
 <BLANKLINE>
 
@@ -117,7 +117,7 @@ bytes(hex:aabbff)
 >>> Fact("bytes({bytes})", {'bytes': [0xaa, 0xbb, 255]})
 bytes(hex:aabbff)
 >>> Fact("set({set})", {'set': {0, True, "ab", b'\xaa'}})
-set([0, "ab", hex:aa, true])
+set({0, "ab", hex:aa, true})
 
 Inspecting datalog values
 -------------------------
@@ -133,7 +133,7 @@ Terms of a fact can be extracted to python values.o
 .. warning::
    Extracting sets is not supported yet.
 
->>> Fact("fact([123])").terms
+>>> Fact("fact({123})").terms
 Traceback (most recent call last):
     ...
 pyo3_runtime.PanicException: not yet implemented

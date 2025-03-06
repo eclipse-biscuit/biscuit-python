@@ -33,6 +33,9 @@ PublicKeyProvider: TypeAlias = Union[
     Callable[[], PublicKey], Callable[[int], PublicKey]
 ]
 
+class Algorithm:
+    pass
+
 class BiscuitBuilder:
     # Create a builder from a datalog snippet and optional parameter values
     #
@@ -179,7 +182,7 @@ class Biscuit:
     @property
     def revocation_ids(self) -> List[str]: ...
 
-class Authorizer:
+class AuthorizerBuilder:
     # Create a new authorizer from a datalog snippet and optional parameter values
     #
     # :param source: a datalog snippet
@@ -193,7 +196,7 @@ class Authorizer:
         source: Optional[str] = None,
         parameters: Parameters = None,
         scope_parameters: ScopeParameters = None,
-    ) -> Authorizer: ...
+    ) -> AuthorizerBuilder: ...
 
     # Add code to the builder, using the provided parameters.
     #
@@ -250,12 +253,43 @@ class Authorizer:
     # :type builder: BlockBuilder
     def merge_block(self, builder: BlockBuilder) -> None: ...
 
+    # Take a snapshot of the authorizer builder and return it, base64-encoded
+    #
+    # :return: a snapshot as a base64-encoded string
+    # :rtype: str
+    def base64_snapshot(self) -> str: ...
+
+    # Take a snapshot of the authorizer builder and return it, as raw bytes
+    #
+    # :return: a snapshot as raw bytes
+    # :rtype: bytes
+    def raw_snapshot(self) -> bytes: ...
+
+    # Build an authorizer builder from a base64-encoded snapshot
+    #
+    # :param input: base64-encoded snapshot
+    # :type input: str
+    # :return: the authorizer builder
+    # :rtype: AuthorizerBuilder
+    @classmethod
+    def from_base64_snapshot(cls, input: str) -> AuthorizerBuilder: ...
+
+    # Build an authorizer builder from a snapshot's raw bytes
+    #
+    # :param input: raw snapshot bytes
+    # :type input: bytes
+    # :return: the authorizer builder
+    # :rtype: AuthorizerBuilder
+    @classmethod
+    def from_raw_snapshot(cls, input: bytes) -> AuthorizerBuilder: ...
+
     # Add a `Biscuit` to this `Authorizer`
     #
     # :param token: the token to authorize
     # :type token: Biscuit
-    def add_token(self, token: Biscuit) -> None: ...
+    def build(self, token: Biscuit) -> Authorizer: ...
 
+class Authorizer:
     # Runs the authorization checks and policies
     #
     # Returns the index of the matching allow policy, or an error containing the matching deny
@@ -405,12 +439,6 @@ class PublicKey:
     # :rtype: list
     def to_bytes(self) -> bytes: ...
 
-    # Serializes a public key to a hexadecimal string
-    #
-    # :return: the public key bytes (hex-encoded)
-    # :rtype: str
-    def to_hex(self) -> str: ...
-
     # Deserializes a public key from raw bytes
     #
     # :param data: the raw bytes
@@ -427,7 +455,7 @@ class PublicKey:
     # :return: the public key
     # :rtype: PublicKey
     @classmethod
-    def from_hex(cls, data: str) -> PublicKey: ...
+    def __new__(cls, data: str) -> PublicKey: ...
 
 # ed25519 private key
 class PrivateKey:
@@ -436,12 +464,6 @@ class PrivateKey:
     # :return: the public key bytes
     # :rtype: list
     def to_bytes(self) -> bytes: ...
-
-    # Serializes a private key to a hexadecimal string
-    #
-    # :return: the private key bytes (hex-encoded)
-    # :rtype: str
-    def to_hex(self) -> str: ...
 
     # Deserializes a private key from raw bytes
     #
@@ -459,7 +481,7 @@ class PrivateKey:
     # :return: the private key
     # :rtype: PrivateKey
     @classmethod
-    def from_hex(cls, data: str) -> PrivateKey: ...
+    def __new__(cls, data: str) -> PrivateKey: ...
 
 # A single datalog Fact
 #
