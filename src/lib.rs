@@ -1,5 +1,10 @@
 // There seem to be false positives with pyo3
 #![allow(clippy::borrow_deref_ref)]
+#![allow(unexpected_cfgs)]
+#![allow(clippy::useless_conversion)]
+use ::biscuit_auth::builder::MapKey;
+use ::biscuit_auth::datalog::ExternFunc;
+use ::biscuit_auth::AuthorizerBuilder;
 use ::biscuit_auth::RootKeyProvider;
 use ::biscuit_auth::UnverifiedBiscuit;
 use chrono::DateTime;
@@ -8,6 +13,9 @@ use chrono::TimeZone;
 use chrono::Utc;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
+use std::ops::Deref;
+use std::str::FromStr;
+use std::sync::Arc;
 
 use ::biscuit_auth::{
     builder, error, Authorizer, AuthorizerLimits, Biscuit, KeyPair, PrivateKey, PublicKey,
@@ -46,6 +54,30 @@ create_exception!(
     pyo3::exceptions::PyException
 );
 
+#[pyclass(eq, eq_int, name = "Algorithm")]
+#[derive(PartialEq, Eq, Clone, Copy)]
+pub enum PyAlgorithm {
+    Ed25519,
+    Secp256r1,
+}
+
+impl From<builder::Algorithm> for PyAlgorithm {
+    fn from(value: builder::Algorithm) -> Self {
+        match value {
+            builder::Algorithm::Ed25519 => Self::Ed25519,
+            builder::Algorithm::Secp256r1 => Self::Secp256r1,
+        }
+    }
+}
+impl From<PyAlgorithm> for builder::Algorithm {
+    fn from(value: PyAlgorithm) -> Self {
+        match value {
+            PyAlgorithm::Ed25519 => Self::Ed25519,
+            PyAlgorithm::Secp256r1 => Self::Secp256r1,
+        }
+    }
+}
+
 struct PyKeyProvider {
     py_value: PyObject,
 }
@@ -81,7 +113,7 @@ impl RootKeyProvider for PyKeyProvider {
 /// :param scope_parameters: public keys for the public key parameters in the datalog snippet
 /// :type scope_parameters: dict, optional
 #[pyclass(name = "BiscuitBuilder")]
-pub struct PyBiscuitBuilder(builder::BiscuitBuilder);
+pub struct PyBiscuitBuilder(Option<builder::BiscuitBuilder>);
 
 #[pymethods]
 impl PyBiscuitBuilder {
@@ -100,7 +132,7 @@ impl PyBiscuitBuilder {
         parameters: Option<HashMap<String, PyTerm>>,
         scope_parameters: Option<HashMap<String, PyPublicKey>>,
     ) -> PyResult<PyBiscuitBuilder> {
-        let mut builder = PyBiscuitBuilder(builder::BiscuitBuilder::new());
+        let mut builder = PyBiscuitBuilder(Some(builder::BiscuitBuilder::new()));
         if let Some(source) = source {
             builder.add_code(&source, parameters, scope_parameters)?;
         }
@@ -118,6 +150,7 @@ impl PyBiscuitBuilder {
         Ok(PyBiscuit(
             self.0
                 .clone()
+                .expect("builder already consumed")
                 .build(&keypair)
                 .map_err(|e| BiscuitBuildError::new_err(e.to_string()))?,
         ))
@@ -157,9 +190,15 @@ impl PyBiscuitBuilder {
             scope_params = HashMap::new();
         }
 
-        self.0
-            .add_code_with_params(source, params, scope_params)
-            .map_err(|e| DataLogError::new_err(e.to_string()))
+        self.0 = Some(
+            self.0
+                .take()
+                .expect("builder already consumed")
+                .code_with_params(source, params, scope_params)
+                .map_err(|e| DataLogError::new_err(e.to_string()))?,
+        );
+
+        Ok(())
     }
 
     /// Add a single fact to the builder. A single fact can be built with
@@ -168,9 +207,15 @@ impl PyBiscuitBuilder {
     /// :param fact: a datalog fact
     /// :type fact: Fact
     pub fn add_fact(&mut self, fact: &PyFact) -> PyResult<()> {
-        self.0
-            .add_fact(fact.0.clone())
-            .map_err(|e| DataLogError::new_err(e.to_string()))
+        self.0 = Some(
+            self.0
+                .take()
+                .expect("builder already consumed")
+                .fact(fact.0.clone())
+                .map_err(|e| DataLogError::new_err(e.to_string()))?,
+        );
+
+        Ok(())
     }
 
     /// Add a single rule to the builder. A single rule can be built with
@@ -179,9 +224,15 @@ impl PyBiscuitBuilder {
     /// :param rule: a datalog rule
     /// :type rule: Rule
     pub fn add_rule(&mut self, rule: &PyRule) -> PyResult<()> {
-        self.0
-            .add_rule(rule.0.clone())
-            .map_err(|e| DataLogError::new_err(e.to_string()))
+        self.0 = Some(
+            self.0
+                .take()
+                .expect("builder already consumed")
+                .rule(rule.0.clone())
+                .map_err(|e| DataLogError::new_err(e.to_string()))?,
+        );
+
+        Ok(())
     }
 
     /// Add a single check to the builder. A single check can be built with
@@ -190,29 +241,51 @@ impl PyBiscuitBuilder {
     /// :param check: a datalog check
     /// :type check: Check
     pub fn add_check(&mut self, check: &PyCheck) -> PyResult<()> {
-        self.0
-            .add_check(check.0.clone())
-            .map_err(|e| DataLogError::new_err(e.to_string()))
+        self.0 = Some(
+            self.0
+                .take()
+                .expect("builder already consumed")
+                .check(check.0.clone())
+                .map_err(|e| DataLogError::new_err(e.to_string()))?,
+        );
+
+        Ok(())
     }
 
     /// Merge a `BlockBuilder` in this `BiscuitBuilder`. The `BlockBuilder` parameter will not be modified
     ///
     /// :param builder: a datalog BlockBuilder
     /// :type builder: BlockBuilder
-    pub fn merge(&mut self, builder: &PyBlockBuilder) {
-        self.0.merge(builder.0.clone())
+    pub fn merge(&mut self, builder: &PyBlockBuilder) -> PyResult<()> {
+        self.0 = Some(
+            self.0
+                .take()
+                .expect("builder already consumed")
+                .merge(builder.0.clone().expect("builder already consumed")),
+        );
+
+        Ok(())
     }
 
     /// Set the root key identifier for this `BiscuitBuilder`
     ///
     /// :param root_key_id: the root key identifier
     /// :type root_key_id: int
-    pub fn set_root_key_id(&mut self, root_key_id: u32) {
-        self.0.set_root_key_id(root_key_id)
+    pub fn set_root_key_id(&mut self, root_key_id: u32) -> PyResult<()> {
+        self.0 = Some(
+            self.0
+                .take()
+                .expect("builder already consumed")
+                .root_key_id(root_key_id),
+        );
+        Ok(())
     }
 
     fn __repr__(&self) -> String {
-        self.0.to_string()
+        match self.0 {
+            Some(ref b) => b.to_string(),
+            None => "_ BiscuitBuilder already consumed_".to_string(),
+        }
     }
 }
 
@@ -314,7 +387,7 @@ impl PyBiscuit {
     /// :rtype: Biscuit
     pub fn append(&self, block: &PyBlockBuilder) -> PyResult<PyBiscuit> {
         self.0
-            .append(block.0.clone())
+            .append(block.0.clone().expect("builder already consumed"))
             .map_err(|e| BiscuitBuildError::new_err(e.to_string()))
             .map(PyBiscuit)
     }
@@ -342,8 +415,8 @@ impl PyBiscuit {
 /// :type parameters: dict, optional
 /// :param scope_parameters: public keys for the public key parameters in the datalog snippet
 /// :type scope_parameters: dict, optional
-#[pyclass(name = "Authorizer")]
-pub struct PyAuthorizer(Authorizer);
+#[pyclass(name = "AuthorizerBuilder")]
+pub struct PyAuthorizerBuilder(Option<AuthorizerBuilder>);
 
 #[pyclass(name = "AuthorizerLimits")]
 #[derive(Clone)]
@@ -357,7 +430,7 @@ pub struct PyAuthorizerLimits {
 }
 
 #[pymethods]
-impl PyAuthorizer {
+impl PyAuthorizerBuilder {
     /// Create a new authorizer from a datalog snippet and optional parameter values
     ///
     /// :param source: a datalog snippet
@@ -372,8 +445,8 @@ impl PyAuthorizer {
         source: Option<String>,
         parameters: Option<HashMap<String, PyTerm>>,
         scope_parameters: Option<HashMap<String, PyPublicKey>>,
-    ) -> PyResult<PyAuthorizer> {
-        let mut builder = PyAuthorizer(Authorizer::new());
+    ) -> PyResult<PyAuthorizerBuilder> {
+        let mut builder = PyAuthorizerBuilder(Some(AuthorizerBuilder::new()));
         if let Some(source) = source {
             builder.add_code(&source, parameters, scope_parameters)?;
         }
@@ -414,9 +487,15 @@ impl PyAuthorizer {
             scope_params = HashMap::new();
         }
 
-        self.0
-            .add_code_with_params(source, params, scope_params)
-            .map_err(|e| DataLogError::new_err(e.to_string()))
+        self.0 = Some(
+            self.0
+                .take()
+                .expect("builder already consumed")
+                .code_with_params(source, params, scope_params)
+                .map_err(|e| DataLogError::new_err(e.to_string()))?,
+        );
+
+        Ok(())
     }
 
     /// Add a single fact to the authorizer. A single fact can be built with
@@ -425,9 +504,15 @@ impl PyAuthorizer {
     /// :param fact: a datalog fact
     /// :type fact: Fact
     pub fn add_fact(&mut self, fact: &PyFact) -> PyResult<()> {
-        self.0
-            .add_fact(fact.0.clone())
-            .map_err(|e| DataLogError::new_err(e.to_string()))
+        self.0 = Some(
+            self.0
+                .take()
+                .expect("builder already consumed")
+                .fact(fact.0.clone())
+                .map_err(|e| DataLogError::new_err(e.to_string()))?,
+        );
+
+        Ok(())
     }
 
     /// Add a single rule to the authorizer. A single rule can be built with
@@ -436,9 +521,15 @@ impl PyAuthorizer {
     /// :param rule: a datalog rule
     /// :type rule: Rule
     pub fn add_rule(&mut self, rule: &PyRule) -> PyResult<()> {
-        self.0
-            .add_rule(rule.0.clone())
-            .map_err(|e| DataLogError::new_err(e.to_string()))
+        self.0 = Some(
+            self.0
+                .take()
+                .expect("builder already consumed")
+                .rule(rule.0.clone())
+                .map_err(|e| DataLogError::new_err(e.to_string()))?,
+        );
+
+        Ok(())
     }
 
     /// Add a single check to the authorizer. A single check can be built with
@@ -447,9 +538,15 @@ impl PyAuthorizer {
     /// :param check: a datalog check
     /// :type check: Check
     pub fn add_check(&mut self, check: &PyCheck) -> PyResult<()> {
-        self.0
-            .add_check(check.0.clone())
-            .map_err(|e| DataLogError::new_err(e.to_string()))
+        self.0 = Some(
+            self.0
+                .take()
+                .expect("builder already consumed")
+                .check(check.0.clone())
+                .map_err(|e| DataLogError::new_err(e.to_string()))?,
+        );
+
+        Ok(())
     }
 
     /// Add a single policy to the authorizer. A single policy can be built with
@@ -458,65 +555,224 @@ impl PyAuthorizer {
     /// :param policy: a datalog policy
     /// :type policy: Policy
     pub fn add_policy(&mut self, policy: &PyPolicy) -> PyResult<()> {
-        self.0
-            .add_policy(policy.0.clone())
-            .map_err(|e| DataLogError::new_err(e.to_string()))
+        self.0 = Some(
+            self.0
+                .take()
+                .expect("builder already consumed")
+                .policy(policy.0.clone())
+                .map_err(|e| DataLogError::new_err(e.to_string()))?,
+        );
+
+        Ok(())
     }
 
-    /// Returns the runtime limits of the authorizer
-    ///
-    /// Those limits cover all the executions under the `authorize`, `query` and `query_all` methods
-    pub fn limits(&self) -> PyAuthorizerLimits {
-        let limits = self.0.limits();
-        PyAuthorizerLimits {
+    pub fn limits(&self) -> PyResult<PyAuthorizerLimits> {
+        let limits = self
+            .0
+            .as_ref()
+            .expect("builder already consumed")
+            .limits()
+            .clone();
+
+        Ok(PyAuthorizerLimits {
             max_facts: limits.max_facts,
             max_iterations: limits.max_iterations,
             max_time: Duration::from_std(limits.max_time).expect("Duration out of range"),
-        }
+        })
     }
 
     /// Sets the runtime limits of the authorizer
     ///
     /// Those limits cover all the executions under the `authorize`, `query` and `query_all` methods
-    pub fn set_limits(&mut self, limits: &PyAuthorizerLimits) {
-        self.0.set_limits(AuthorizerLimits {
-            max_facts: limits.max_facts,
-            max_iterations: limits.max_iterations,
-            max_time: Duration::to_std(&limits.max_time).expect("Duration out of range"),
-        })
+    pub fn set_limits(&mut self, limits: &PyAuthorizerLimits) -> PyResult<()> {
+        self.0 = Some(self.0.take().expect("builder already consumed").set_limits(
+            AuthorizerLimits {
+                max_facts: limits.max_facts,
+                max_iterations: limits.max_iterations,
+                max_time: Duration::to_std(&limits.max_time).expect("Duration out of range"),
+            },
+        ));
+
+        Ok(())
     }
 
     /// adds a fact `time($current_time)` with the current time
-    pub fn set_time(&mut self) {
-        self.0.set_time();
+    pub fn set_time(&mut self) -> PyResult<()> {
+        self.0 = Some(self.0.take().expect("builder already consumed").time());
+        Ok(())
     }
 
     /// Merge another `Authorizer` in this `Authorizer`. The `Authorizer` argument will not be modified
     ///
     /// :param builder: an Authorizer
     /// :type builder: Authorizer
-    pub fn merge(&mut self, builder: &PyAuthorizer) {
-        self.0.merge(builder.0.clone())
+    pub fn merge(&mut self, builder: &PyAuthorizerBuilder) -> PyResult<()> {
+        self.0 = Some(
+            self.0
+                .take()
+                .expect("builder already consumed")
+                .merge(builder.0.clone().expect("builder already consumed")),
+        );
+        Ok(())
     }
 
     /// Merge a `BlockBuilder` in this `Authorizer`. The `BlockBuilder` will not be modified
     ///
     /// :param builder: a BlockBuilder
     /// :type builder: BlockBuilder
-    pub fn merge_block(&mut self, builder: &PyBlockBuilder) {
-        self.0.merge_block(builder.0.clone())
+    pub fn merge_block(&mut self, builder: &PyBlockBuilder) -> PyResult<()> {
+        self.0 = Some(
+            self.0
+                .take()
+                .expect("builder already consumed")
+                .merge_block(builder.0.clone().expect("builder already consumed")),
+        );
+        Ok(())
     }
 
-    /// Add a `Biscuit` to this `Authorizer`
+    pub fn register_extern_func(&mut self, name: &str, func: PyObject) -> PyResult<()> {
+        self.0 = Some(
+            self.0
+                .take()
+                .expect("builder already consumed")
+                .register_extern_func(
+                    name.to_string(),
+                    ExternFunc::new(Arc::new(move |left, right| {
+                        Python::with_gil(|py| {
+                            let bound = func.bind(py);
+                            if bound.is_callable() {
+                                let left = term_to_py(&left).map_err(|e| e.to_string())?;
+                                let result = match right {
+                                    Some(right) => {
+                                        let right =
+                                            term_to_py(&right).map_err(|e| e.to_string())?;
+                                        bound.call1((left, right)).map_err(|e| e.to_string())?
+                                    }
+                                    None => bound.call1((left,)).map_err(|e| e.to_string())?,
+                                };
+                                let py_result: PyTerm =
+                                    result.extract().map_err(|e| e.to_string())?;
+                                Ok(py_result.to_term().map_err(|e| e.to_string())?)
+                            } else {
+                                Err("expected a function".to_string())
+                            }
+                        })
+                    })),
+                ),
+        );
+        Ok(())
+    }
+
+    pub fn register_extern_funcs(&mut self, funcs: HashMap<String, PyObject>) -> PyResult<()> {
+        for (name, func) in funcs {
+            self.register_extern_func(&name, func)?;
+        }
+
+        Ok(())
+    }
+
+    pub fn set_extern_funcs(&mut self, funcs: HashMap<String, PyObject>) -> PyResult<()> {
+        self.0 = Some(
+            self.0
+                .take()
+                .expect("builder already consumed")
+                .set_extern_funcs(HashMap::new()),
+        );
+        self.register_extern_funcs(funcs)
+    }
+
+    /// Take a snapshot of the authorizer builder and return it, base64-encoded
+    ///
+    /// :return: a snapshot as a base64-encoded string
+    /// :rtype: str
+    pub fn base64_snapshot(&self) -> PyResult<String> {
+        self.0
+            .clone()
+            .expect("builder already consumed")
+            .to_base64_snapshot()
+            .map_err(|error| BiscuitSerializationError::new_err(error.to_string()))
+    }
+
+    /// Take a snapshot of the authorizer and return it, as raw bytes
+    ///
+    /// :return: a snapshot as raw bytes
+    /// :rtype: bytes
+    pub fn raw_snapshot(&self) -> PyResult<Vec<u8>> {
+        self.0
+            .clone()
+            .expect("builder already consumed")
+            .to_raw_snapshot()
+            .map_err(|error| BiscuitSerializationError::new_err(error.to_string()))
+    }
+
+    /// Build an authorizer builder from a base64-encoded snapshot
+    ///
+    /// :param input: base64-encoded snapshot
+    /// :type input: str
+    /// :return: the authorizer builder
+    /// :rtype: AuthorizerBuilder
+    #[classmethod]
+    pub fn from_base64_snapshot(_: &Bound<PyType>, input: &str) -> PyResult<Self> {
+        Ok(PyAuthorizerBuilder(Some(
+            AuthorizerBuilder::from_base64_snapshot(input)
+                .map_err(|error| BiscuitValidationError::new_err(error.to_string()))?,
+        )))
+    }
+
+    /// Build an authorizer builder from a snapshot's raw bytes
+    ///
+    /// :param input: raw snapshot bytes
+    /// :type input: bytes
+    /// :return: the authorizer builder
+    /// :rtype: AuthorizerBuilder
+    #[classmethod]
+    pub fn from_raw_snapshot(_: &Bound<PyType>, input: &[u8]) -> PyResult<Self> {
+        Ok(PyAuthorizerBuilder(Some(
+            AuthorizerBuilder::from_raw_snapshot(input)
+                .map_err(|error| BiscuitValidationError::new_err(error.to_string()))?,
+        )))
+    }
+
+    /// Build the `AuthorizerBuilder` with the provided `Biscuit`
     ///
     /// :param token: the token to authorize
     /// :type token: Biscuit
-    pub fn add_token(&mut self, token: &PyBiscuit) -> PyResult<()> {
-        self.0
-            .add_token(&token.0)
-            .map_err(|e| BiscuitValidationError::new_err(e.to_string()))
+    /// :return: the authorizer
+    /// :rtype Authorizer
+    pub fn build(&self, token: &PyBiscuit) -> PyResult<PyAuthorizer> {
+        Ok(PyAuthorizer(
+            self.0
+                .clone()
+                .expect("builder already consumed")
+                .build(&token.0)
+                .map_err(|e| BiscuitValidationError::new_err(e.to_string()))?,
+        ))
     }
 
+    pub fn build_unauthenticated(&self) -> PyResult<PyAuthorizer> {
+        Ok(PyAuthorizer(
+            self.0
+                .clone()
+                .expect("builder already consumed")
+                .build_unauthenticated()
+                .map_err(|e| BiscuitValidationError::new_err(e.to_string()))?,
+        ))
+    }
+
+    fn __repr__(&self) -> String {
+        match self.0 {
+            Some(ref x) => x.to_string(),
+            None => "_ consumed AuthorizerBuilder _".to_string(),
+        }
+    }
+}
+
+/// The Authorizer verifies a request according to its policies and the provided token
+#[pyclass(name = "Authorizer")]
+pub struct PyAuthorizer(Authorizer);
+
+#[pymethods]
+impl PyAuthorizer {
     /// Runs the authorization checks and policies
     ///
     /// Returns the index of the matching allow policy, or an error containing the matching deny
@@ -614,7 +870,7 @@ impl PyAuthorizer {
 /// :type scope_parameters: dict, optional
 #[pyclass(name = "BlockBuilder")]
 #[derive(Clone)]
-pub struct PyBlockBuilder(builder::BlockBuilder);
+pub struct PyBlockBuilder(Option<builder::BlockBuilder>);
 
 #[pymethods]
 impl PyBlockBuilder {
@@ -633,7 +889,7 @@ impl PyBlockBuilder {
         parameters: Option<HashMap<String, PyTerm>>,
         scope_parameters: Option<HashMap<String, PyPublicKey>>,
     ) -> PyResult<PyBlockBuilder> {
-        let mut builder = PyBlockBuilder(builder::BlockBuilder::new());
+        let mut builder = PyBlockBuilder(Some(builder::BlockBuilder::new()));
         if let Some(source) = source {
             builder.add_code(&source, parameters, scope_parameters)?;
         }
@@ -646,9 +902,15 @@ impl PyBlockBuilder {
     /// :param fact: a datalog fact
     /// :type fact: Fact
     pub fn add_fact(&mut self, fact: &PyFact) -> PyResult<()> {
-        self.0
-            .add_fact(fact.0.clone())
-            .map_err(|e| DataLogError::new_err(e.to_string()))
+        self.0 = Some(
+            self.0
+                .take()
+                .expect("builder already consumed")
+                .fact(fact.0.clone())
+                .map_err(|e| DataLogError::new_err(e.to_string()))?,
+        );
+
+        Ok(())
     }
 
     /// Add a single rule to the builder. A single rule can be built with
@@ -657,9 +919,15 @@ impl PyBlockBuilder {
     /// :param rule: a datalog rule
     /// :type rule: Rule
     pub fn add_rule(&mut self, rule: &PyRule) -> PyResult<()> {
-        self.0
-            .add_rule(rule.0.clone())
-            .map_err(|e| DataLogError::new_err(e.to_string()))
+        self.0 = Some(
+            self.0
+                .take()
+                .expect("builder already consumed")
+                .rule(rule.0.clone())
+                .map_err(|e| DataLogError::new_err(e.to_string()))?,
+        );
+
+        Ok(())
     }
 
     /// Add a single check to the builder. A single check can be built with
@@ -668,17 +936,29 @@ impl PyBlockBuilder {
     /// :param check: a datalog check
     /// :type check: Check
     pub fn add_check(&mut self, check: &PyCheck) -> PyResult<()> {
-        self.0
-            .add_check(check.0.clone())
-            .map_err(|e| DataLogError::new_err(e.to_string()))
+        self.0 = Some(
+            self.0
+                .take()
+                .expect("builder already consumed")
+                .check(check.0.clone())
+                .map_err(|e| DataLogError::new_err(e.to_string()))?,
+        );
+
+        Ok(())
     }
 
     /// Merge a `BlockBuilder` in this `BlockBuilder`. The `BlockBuilder` will not be modified
     ///
     /// :param builder: a datalog BlockBuilder
     /// :type builder: BlockBuilder
-    pub fn merge(&mut self, builder: &PyBlockBuilder) {
-        self.0.merge(builder.0.clone())
+    pub fn merge(&mut self, builder: &mut PyBlockBuilder) -> PyResult<()> {
+        self.0 = Some(
+            self.0
+                .take()
+                .expect("builder already consumed")
+                .merge(builder.0.take().expect("builder already consumed")),
+        );
+        Ok(())
     }
 
     /// Add code to the builder, using the provided parameters.
@@ -715,13 +995,21 @@ impl PyBlockBuilder {
             scope_params = HashMap::new();
         }
 
-        self.0
-            .add_code_with_params(source, params, scope_params)
-            .map_err(|e| DataLogError::new_err(e.to_string()))
+        self.0 = Some(
+            self.0
+                .take()
+                .expect("builder already consumed")
+                .code_with_params(source, params, scope_params)
+                .map_err(|e| DataLogError::new_err(e.to_string()))?,
+        );
+        Ok(())
     }
 
     fn __repr__(&self) -> String {
-        self.0.to_string()
+        match self.0 {
+            Some(ref b) => b.to_string(),
+            None => "_ BlockBuilder already consumed _".to_string(),
+        }
     }
 }
 
@@ -746,32 +1034,6 @@ impl PyKeyPair {
     #[classmethod]
     pub fn from_private_key(_: &Bound<PyType>, private_key: PyPrivateKey) -> Self {
         PyKeyPair(KeyPair::from(&private_key.0))
-    }
-
-    /// Generate a keypair from a DER buffer
-    ///
-    /// :param bytes: private key bytes in DER format
-    /// :type private_key: PrivateKey
-    /// :return: the corresponding keypair
-    /// :rtype: KeyPair
-    #[classmethod]
-    pub fn from_private_key_der(_: &Bound<PyType>, der: &[u8]) -> PyResult<Self> {
-        let kp = KeyPair::from_private_key_der(der)
-            .map_err(|e: error::Format| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
-        Ok(PyKeyPair(kp))
-    }
-
-    /// Generate a keypair from a PEM buffer
-    ///
-    /// :param bytes: private key bytes in PEM format
-    /// :type private_key: PrivateKey
-    /// :return: the corresponding keypair
-    /// :rtype: KeyPair
-    #[classmethod]
-    pub fn from_private_key_pem(_: &Bound<PyType>, pem: &str) -> PyResult<Self> {
-        let kp = KeyPair::from_private_key_pem(pem)
-            .map_err(|e: error::Format| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
-        Ok(PyKeyPair(kp))
     }
 
     /// The public key part
@@ -804,7 +1066,7 @@ impl PyPublicKey {
     ///
     /// :return: the public key bytes
     /// :rtype: list
-    pub fn to_bytes(&self) -> [u8; 32] {
+    pub fn to_bytes(&self) -> Vec<u8> {
         self.0.to_bytes()
     }
 
@@ -812,8 +1074,8 @@ impl PyPublicKey {
     ///
     /// :return: the public key bytes (hex-encoded)
     /// :rtype: str
-    pub fn to_hex(&self) -> String {
-        hex::encode(self.0.to_bytes())
+    fn __repr__(&self) -> String {
+        self.0.to_string()
     }
 
     /// Deserializes a public key from raw bytes
@@ -823,8 +1085,8 @@ impl PyPublicKey {
     /// :return: the public key
     /// :rtype: PublicKey
     #[classmethod]
-    pub fn from_bytes(_: &Bound<PyType>, data: &[u8]) -> PyResult<PyPublicKey> {
-        match PublicKey::from_bytes(data) {
+    pub fn from_bytes(_: &Bound<PyType>, data: &[u8], alg: &PyAlgorithm) -> PyResult<PyPublicKey> {
+        match PublicKey::from_bytes(data, builder::Algorithm::from(*alg)) {
             Ok(key) => Ok(PyPublicKey(key)),
             Err(error) => Err(PyValueError::new_err(error.to_string())),
         }
@@ -836,13 +1098,37 @@ impl PyPublicKey {
     /// :type data: str
     /// :return: the public key
     /// :rtype: PublicKey
+    #[new]
+    pub fn new(data: &str) -> PyResult<PyPublicKey> {
+        match PublicKey::from_str(data) {
+            Ok(key) => Ok(PyPublicKey(key)),
+            Err(error) => Err(PyValueError::new_err(error.to_string())),
+        }
+    }
+
+    /// Deserializes a public key from a der buffer
+    ///
+    /// :param der: the der buffer
+    /// :type der: bytes
+    /// :return: the public key
+    /// :rtype: PublicKey
     #[classmethod]
-    pub fn from_hex(_: &Bound<PyType>, data: &str) -> PyResult<PyPublicKey> {
-        let data = match hex::decode(data) {
-            Ok(data) => data,
-            Err(error) => return Err(PyValueError::new_err(error.to_string())),
-        };
-        match PublicKey::from_bytes(&data) {
+    pub fn from_der(_: &Bound<PyType>, der: &[u8]) -> PyResult<Self> {
+        match PublicKey::from_der(der) {
+            Ok(key) => Ok(PyPublicKey(key)),
+            Err(error) => Err(PyValueError::new_err(error.to_string())),
+        }
+    }
+
+    /// Deserializes a public key from a PEM string
+    ///
+    /// :param data: the der buffer
+    /// :type pem: string
+    /// :return: the public key
+    /// :rtype: PublicKey
+    #[classmethod]
+    pub fn from_pem(_: &Bound<PyType>, pem: &str) -> PyResult<Self> {
+        match PublicKey::from_pem(pem) {
             Ok(key) => Ok(PyPublicKey(key)),
             Err(error) => Err(PyValueError::new_err(error.to_string())),
         }
@@ -860,16 +1146,16 @@ impl PyPrivateKey {
     ///
     /// :return: the public key bytes
     /// :rtype: list
-    pub fn to_bytes(&self) -> [u8; 32] {
-        self.0.to_bytes()
+    pub fn to_bytes(&self) -> Vec<u8> {
+        self.0.to_bytes().deref().clone()
     }
 
     /// Serializes a private key to a hexadecimal string
     ///
     /// :return: the private key bytes (hex-encoded)
     /// :rtype: str
-    pub fn to_hex(&self) -> String {
-        hex::encode(self.0.to_bytes())
+    fn __repr__(&self) -> String {
+        self.0.to_prefixed_string()
     }
 
     /// Deserializes a private key from raw bytes
@@ -879,8 +1165,8 @@ impl PyPrivateKey {
     /// :return: the private key
     /// :rtype: PrivateKey
     #[classmethod]
-    pub fn from_bytes(_: &Bound<PyType>, data: &[u8]) -> PyResult<PyPrivateKey> {
-        match PrivateKey::from_bytes(data) {
+    pub fn from_bytes(_: &Bound<PyType>, data: &[u8], alg: &PyAlgorithm) -> PyResult<PyPrivateKey> {
+        match PrivateKey::from_bytes(data, builder::Algorithm::from(*alg)) {
             Ok(key) => Ok(PyPrivateKey(key)),
             Err(error) => Err(PyValueError::new_err(error.to_string())),
         }
@@ -892,13 +1178,37 @@ impl PyPrivateKey {
     /// :type data: str
     /// :return: the private key
     /// :rtype: PrivateKey
+    #[new]
+    pub fn new(data: &str) -> PyResult<PyPrivateKey> {
+        match PrivateKey::from_str(data) {
+            Ok(key) => Ok(PyPrivateKey(key)),
+            Err(error) => Err(PyValueError::new_err(error.to_string())),
+        }
+    }
+
+    /// Deserializes a private key from a der buffer
+    ///
+    /// :param der: the der buffer
+    /// :type der: bytes
+    /// :return: the Private key
+    /// :rtype: PrivateKey
     #[classmethod]
-    pub fn from_hex(_: &Bound<PyType>, data: &str) -> PyResult<PyPrivateKey> {
-        let data = match hex::decode(data) {
-            Ok(data) => data,
-            Err(error) => return Err(PyValueError::new_err(error.to_string())),
-        };
-        match PrivateKey::from_bytes(&data) {
+    pub fn from_der(_: &Bound<PyType>, der: &[u8]) -> PyResult<Self> {
+        match PrivateKey::from_der(der) {
+            Ok(key) => Ok(PyPrivateKey(key)),
+            Err(error) => Err(PyValueError::new_err(error.to_string())),
+        }
+    }
+
+    /// Deserializes a private key from a PEM string
+    ///
+    /// :param data: the der buffer
+    /// :type pem: string
+    /// :return: the Private key
+    /// :rtype: PrivateKey
+    #[classmethod]
+    pub fn from_pem(_: &Bound<PyType>, pem: &str) -> PyResult<Self> {
+        match PrivateKey::from_pem(pem) {
             Ok(key) => Ok(PyPrivateKey(key)),
             Err(error) => Err(PyValueError::new_err(error.to_string())),
         }
@@ -926,6 +1236,17 @@ fn inner_term_to_py(t: &builder::Term, py: Python<'_>) -> PyResult<Py<PyAny>> {
     }
 }
 
+fn term_to_py(t: &builder::Term) -> PyResult<Py<PyAny>> {
+    Python::with_gil(|py| match t {
+        builder::Term::Parameter(_) => Err(DataLogError::new_err("Invalid term value".to_string())),
+        builder::Term::Variable(_) => Err(DataLogError::new_err("Invalid term value".to_string())),
+        builder::Term::Set(_vs) => todo!(),
+        builder::Term::Array(_vs) => todo!(),
+        builder::Term::Map(_vs) => todo!(),
+        term => inner_term_to_py(term, py),
+    })
+}
+
 /// Wrapper for a non-naïve python date
 #[derive(FromPyObject)]
 pub struct PyDate(Py<PyDateTime>);
@@ -940,7 +1261,7 @@ impl Eq for PyDate {}
 
 impl PartialOrd for PyDate {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        self.0.to_string().partial_cmp(&other.0.to_string())
+        Some(self.cmp(other))
     }
 }
 
@@ -955,6 +1276,9 @@ impl Ord for PyDate {
 pub enum PyTerm {
     Simple(NestedPyTerm),
     Set(BTreeSet<NestedPyTerm>),
+    Array(Vec<PyTerm>),
+    StrDict(HashMap<String, PyTerm>),
+    IntDict(HashMap<i64, PyTerm>),
 }
 
 impl NestedPyTerm {
@@ -986,6 +1310,21 @@ impl PyTerm {
                 .map(|s| s.to_term())
                 .collect::<PyResult<_>>()
                 .map(builder::Term::Set),
+            PyTerm::Array(vs) => vs
+                .iter()
+                .map(|s| s.to_term())
+                .collect::<PyResult<_>>()
+                .map(builder::Term::Array),
+            PyTerm::StrDict(vs) => vs
+                .iter()
+                .map(|(k, v)| Ok((MapKey::Str(k.to_string()), v.to_term()?)))
+                .collect::<PyResult<_>>()
+                .map(builder::Term::Map),
+            PyTerm::IntDict(vs) => vs
+                .iter()
+                .map(|(k, v)| Ok((MapKey::Integer(*k), v.to_term()?)))
+                .collect::<PyResult<_>>()
+                .map(builder::Term::Map),
         }
     }
 }
@@ -1026,23 +1365,7 @@ impl PyFact {
     /// The fact terms
     #[getter]
     pub fn terms(&self) -> PyResult<Vec<PyObject>> {
-        self.0
-            .predicate
-            .terms
-            .iter()
-            .map(|t| {
-                Python::with_gil(|py| match t {
-                    builder::Term::Parameter(_) => {
-                        Err(DataLogError::new_err("Invalid term value".to_string()))
-                    }
-                    builder::Term::Variable(_) => {
-                        Err(DataLogError::new_err("Invalid term value".to_string()))
-                    }
-                    builder::Term::Set(_vs) => todo!(),
-                    term => inner_term_to_py(term, py),
-                })
-            })
-            .collect()
+        self.0.predicate.terms.iter().map(term_to_py).collect()
     }
 
     fn __repr__(&self) -> String {
@@ -1247,7 +1570,7 @@ impl PyUnverifiedBiscuit {
     /// :rtype: Biscuit
     pub fn append(&self, block: &PyBlockBuilder) -> PyResult<PyUnverifiedBiscuit> {
         self.0
-            .append(block.0.clone())
+            .append(block.0.clone().expect("builder already consumed"))
             .map_err(|e| BiscuitBuildError::new_err(e.to_string()))
             .map(PyUnverifiedBiscuit)
     }
@@ -1263,16 +1586,12 @@ impl PyUnverifiedBiscuit {
     }
 
     pub fn verify(&self, root: PyObject) -> PyResult<PyBiscuit> {
-        // TODO replace with UnverifiedBiscuit::check_signature once  https://github.com/biscuit-auth/biscuit-rust/pull/189 is merged and released
-
-        let data = self
-            .0
-            .to_vec()
-            .map_err(|e| BiscuitValidationError::new_err(e.to_string()))?;
-        match Biscuit::from(data, PyKeyProvider { py_value: root }) {
-            Ok(biscuit) => Ok(PyBiscuit(biscuit)),
-            Err(error) => Err(BiscuitValidationError::new_err(error.to_string())),
-        }
+        Ok(PyBiscuit(
+            self.0
+                .clone()
+                .verify(PyKeyProvider { py_value: root })
+                .map_err(|e| BiscuitValidationError::new_err(e.to_string()))?,
+        ))
     }
 }
 
@@ -1286,16 +1605,27 @@ pub fn biscuit_auth(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<PyBiscuitBuilder>()?;
     m.add_class::<PyBlockBuilder>()?;
     m.add_class::<PyAuthorizer>()?;
+    m.add_class::<PyAuthorizerBuilder>()?;
     m.add_class::<PyFact>()?;
     m.add_class::<PyRule>()?;
     m.add_class::<PyCheck>()?;
     m.add_class::<PyPolicy>()?;
     m.add_class::<PyUnverifiedBiscuit>()?;
+    m.add_class::<PyAlgorithm>()?;
 
     m.add("DataLogError", py.get_type_bound::<DataLogError>())?;
-    m.add("AuthorizationError", py.get_type_bound::<AuthorizationError>())?;
-    m.add("BiscuitBuildError", py.get_type_bound::<BiscuitBuildError>())?;
-    m.add("BiscuitBlockError", py.get_type_bound::<BiscuitBlockError>())?;
+    m.add(
+        "AuthorizationError",
+        py.get_type_bound::<AuthorizationError>(),
+    )?;
+    m.add(
+        "BiscuitBuildError",
+        py.get_type_bound::<BiscuitBuildError>(),
+    )?;
+    m.add(
+        "BiscuitBlockError",
+        py.get_type_bound::<BiscuitBlockError>(),
+    )?;
     m.add(
         "BiscuitValidationError",
         py.get_type_bound::<BiscuitValidationError>(),
