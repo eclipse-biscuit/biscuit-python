@@ -1,3 +1,11 @@
+# 0.4.0-beta.2
+
+- try fixing CI
+
+# 0.4.0-beta.1 (not published, broken ci)
+
+- biscuit-rust 6.0.0-beta.3
+
 # 0.3.2
 
 - build wheels for more python versions (#28):
