@@ -1,3 +1,7 @@
+# 0.4.0-beta.3
+
+- try fixing CI
+
 # 0.4.0-beta.2
 
 - try fixing CI
