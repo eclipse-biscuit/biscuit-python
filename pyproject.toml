@@ -1,5 +1,5 @@
 [project]
-name="biscuit_auth"
+name="biscuit-python"
 description="Python bindings for the biscuit auth platform"
 readme="README.md"
 license= { file = "LICENSE" }

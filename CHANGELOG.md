@@ -1,3 +1,7 @@
+# 0.4.0-beta.1
+ 
+ - biscuit-rust 6.0.0-beta.3
+ 
 # 0.3.2
 
 - build wheels for more python versions (#28):
