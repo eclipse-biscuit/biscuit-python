@@ -71,7 +71,7 @@ jobs:
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
-          name: wheels-musl-${{ matrix.target }}
+          name: wheels-musl-${{ matrix.platform.target }}
           path: dist
 
   windows:
@@ -136,8 +136,7 @@ jobs:
 
   merge:
     runs-on: ubuntu-latest
-    # needs: [linux, linux-musl, windows, macos, sdist]
-    needs: [linux, windows, macos, sdist]
+    needs: [linux, linux-musl, windows, macos, sdist]
     steps:
       - name: Merge Artifacts
         uses: actions/upload-artifact/merge@v4
