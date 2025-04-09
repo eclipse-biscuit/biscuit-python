@@ -1,3 +1,8 @@
+/*
+ * SPDX-FileCopyrightText: 2022 Josh Wright, Clément Delafargue
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
 // There seem to be false positives with pyo3
 #![allow(clippy::borrow_deref_ref)]
 #![allow(unexpected_cfgs)]
