@@ -1225,12 +1225,19 @@ pub enum NestedPyTerm {
     Bytes(Vec<u8>),
 }
 
+// TODO follow up-to-date conversion methods from pyo3
 fn inner_term_to_py(t: &builder::Term, py: Python<'_>) -> PyResult<Py<PyAny>> {
     match t {
-        builder::Term::Integer(i) => Ok((*i).into_py(py)),
-        builder::Term::Str(s) => Ok(s.into_py(py)),
-        builder::Term::Date(d) => Ok(Utc.timestamp_opt(*d as i64, 0).unwrap().into_py(py)),
-        builder::Term::Bytes(bs) => Ok(bs.clone().into_py(py)),
+        builder::Term::Integer(i) => Ok((*i).into_pyobject(py).unwrap().into_any().unbind()),
+        builder::Term::Str(s) => Ok(s.into_pyobject(py).unwrap().into_any().unbind()),
+        builder::Term::Date(d) => Ok(Utc
+            .timestamp_opt(*d as i64, 0)
+            .unwrap()
+            .into_pyobject(py)
+            .unwrap()
+            .into_any()
+            .unbind()),
+        builder::Term::Bytes(bs) => Ok(bs.clone().into_pyobject(py).unwrap().into_any().unbind()),
         builder::Term::Bool(b) => Ok(b.into_py(py)),
         _ => Err(DataLogError::new_err("Invalid term value".to_string())),
     }
@@ -1613,26 +1620,17 @@ pub fn biscuit_auth(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<PyUnverifiedBiscuit>()?;
     m.add_class::<PyAlgorithm>()?;
 
-    m.add("DataLogError", py.get_type_bound::<DataLogError>())?;
-    m.add(
-        "AuthorizationError",
-        py.get_type_bound::<AuthorizationError>(),
-    )?;
-    m.add(
-        "BiscuitBuildError",
-        py.get_type_bound::<BiscuitBuildError>(),
-    )?;
-    m.add(
-        "BiscuitBlockError",
-        py.get_type_bound::<BiscuitBlockError>(),
-    )?;
+    m.add("DataLogError", py.get_type::<DataLogError>())?;
+    m.add("AuthorizationError", py.get_type::<AuthorizationError>())?;
+    m.add("BiscuitBuildError", py.get_type::<BiscuitBuildError>())?;
+    m.add("BiscuitBlockError", py.get_type::<BiscuitBlockError>())?;
     m.add(
         "BiscuitValidationError",
-        py.get_type_bound::<BiscuitValidationError>(),
+        py.get_type::<BiscuitValidationError>(),
     )?;
     m.add(
         "BiscuitSerializationError",
-        py.get_type_bound::<BiscuitSerializationError>(),
+        py.get_type::<BiscuitSerializationError>(),
     )?;
 
     Ok(())

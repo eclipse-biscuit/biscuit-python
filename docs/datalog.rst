@@ -128,7 +128,7 @@ Terms of a fact can be extracted to python values.o
 >>> fact.name
 'fact'
 >>> fact.terms
-['abc', 123, [170], datetime.datetime(2023, 6, 9, 0, 0, tzinfo=datetime.timezone.utc), True]
+['abc', 123, b'\xaa', datetime.datetime(2023, 6, 9, 0, 0, tzinfo=datetime.timezone.utc), True]
 
 .. warning::
    Extracting sets is not supported yet.
