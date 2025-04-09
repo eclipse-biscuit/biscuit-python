@@ -9,7 +9,7 @@ from biscuit_auth import Algorithm, KeyPair, Authorizer, AuthorizerBuilder, Bisc
 def test_fact():
     fact = Fact('fact(1, true, "", "Test", hex:aabbcc, 2023-04-29T01:00:00Z)')
     assert fact.name == "fact"
-    assert fact.terms == [1, True, "", "Test", [0xaa, 0xbb, 0xcc], datetime(2023, 4, 29, 1, 0, 0, tzinfo = timezone.utc)]
+    assert fact.terms == [1, True, "", "Test", b'\xaa\xbb\xcc', datetime(2023, 4, 29, 1, 0, 0, tzinfo = timezone.utc)]
 
 def test_biscuit_builder():
     kp = KeyPair()
@@ -30,7 +30,7 @@ def test_biscuit_builder():
       { 'str': "1234",
         'int': 1,
         'bool': True,
-        'bytes': [0xaa, 0xbb],
+        'bytes': b'\xaa\xbb',
         'datetime': datetime(2023, 4, 3, 10, 0, 0, tzinfo = timezone.utc),
         'set': {2, True, "Test", datetime(2023, 4, 29, 1, 0, 0, tzinfo = timezone.utc) },
         'array': [2, True, "Test", ["inner"]],
@@ -94,7 +94,7 @@ def test_block_builder():
       { 'str': "1234",
         'int': 1,
         'bool': True,
-        'bytes': [0xaa, 0xbb],
+        'bytes': b'\xaa\xbb',
         'datetime': datetime(2023, 4, 3, 10, 0, 0, tzinfo = timezone.utc),
       },
       { 'pubkey': pubkey }
@@ -149,7 +149,7 @@ def test_authorizer_builder():
       { 'str': "1234",
         'int': 1,
         'bool': True,
-        'bytes': [0xaa, 0xbb],
+        'bytes': b'\xaa\xbb',
         'datetime': datetime(2023, 4, 3, 10, 0, 0, tzinfo = timezone.utc),
       },
       { 'pubkey': pubkey }
@@ -299,18 +299,16 @@ def test_snapshot():
     assert facts[0].name == "u"
     assert facts[0].terms == ["1234"]
 
-    # raw_snapshot() returns a list of bytes, not a `bytes` value directly
-    return
     raw_snapshot = authorizer.raw_snapshot()
     parsed_from_raw = Authorizer.from_raw_snapshot(raw_snapshot)
     assert repr(authorizer) == repr(parsed_from_raw)
 
-    raw_policy = raw_parsed.authorize()
+    raw_policy = parsed_from_raw.authorize()
 
     assert raw_policy == 0
 
     rule = Rule("u($id) <- user($id), $id == {id}", { 'id': "1234"})
-    raw_facts = raw_parsed.query(rule)
+    raw_facts = parsed_from_raw.query(rule)
 
     assert len(raw_facts) == 1
     assert raw_facts[0].name == "u"
@@ -325,8 +323,6 @@ def test_builder_snapshot():
     parsed = AuthorizerBuilder.from_base64_snapshot(snapshot)
     assert repr(authorizer) == repr(parsed)
 
-    # raw_snapshot() returns a list of bytes, not a `bytes` value directly
-    return
     raw_snapshot = authorizer.raw_snapshot()
     parsed_from_raw = AuthorizerBuilder.from_raw_snapshot(raw_snapshot)
     assert repr(authorizer) == repr(parsed_from_raw)
