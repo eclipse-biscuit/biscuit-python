@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from biscuit_auth import Algorithm, KeyPair, Authorizer, AuthorizerBuilder, Biscuit, BiscuitBuilder, BlockBuilder, Check, Fact, KeyPair, Policy, PrivateKey, PublicKey, Rule, UnverifiedBiscuit
+from biscuit_auth import Algorithm, KeyPair, Authorizer, AuthorizerBuilder, Biscuit, BiscuitBuilder, BlockBuilder, Check, Fact, KeyPair, Policy, PrivateKey, PublicKey, Rule, UnverifiedBiscuit, AuthorizationError
 
 def test_fact():
     fact = Fact('fact(1, true, "", "Test", hex:aabbcc, 2023-04-29T01:00:00Z)')
@@ -236,6 +236,16 @@ def test_key_selection():
       Biscuit.from_base64(token2, choose_key)
     except:
       pass
+
+def test_authorizer_exception():
+    authorizer = AuthorizerBuilder("check if true; reject if true; allow if false; deny if true;").build_unauthenticated()
+    try:
+        authorizer.authorize()
+        assert False
+    except AuthorizationError as e:
+        (args,) = e.args
+        assert args['matched_policy'] == {'code': 'deny if true', 'policy_id': 1}
+        assert args['checks'] == [{'authorizer_check': True, 'block_id': None, 'check_id': 1, 'code': 'reject if true'}]
 
 def test_complete_lifecycle():
     private_key = PrivateKey("ed25519-private/473b5189232f3f597b5c2f3f9b0d5e28b1ee4e7cce67ec6b7fbf5984157a6b97")
