@@ -3,6 +3,7 @@ name="biscuit-python"
 description="Python bindings for the biscuit auth platform"
 readme="README.md"
 license= { file = "LICENSE" }
+dynamic = ["version"]
 
 [project.urls]
 homepage = "https://biscuitsec.org/usage/python"
