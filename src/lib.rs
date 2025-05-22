@@ -47,7 +47,7 @@ struct AuthorizationErrorData {
 }
 
 #[derive(IntoPyObject)]
-struct MatchedPolicyData {
+pub struct MatchedPolicyData {
     policy_id: usize,
     code: String,
 }
@@ -807,15 +807,16 @@ impl PyAuthorizer {
     ///
     /// :return: the index of the matched allow rule
     /// :rtype: int
-    pub fn authorize(&mut self) -> PyResult<usize> {
-        self.0.authorize().map_err(|error| match error {
+    pub fn authorize(&mut self) -> PyResult<MatchedPolicyData> {
+        let all_policies = self.0.dump().3;
+        let policy_id = self.0.authorize().map_err(|error| match error {
             error::Token::FailedLogic(error::Logic::Unauthorized {
                 policy: MatchedPolicy::Deny(pid),
                 checks,
             }) => AuthorizationError::new_err(AuthorizationErrorData {
                 matched_policy: Some(MatchedPolicyData {
                     policy_id: pid,
-                    code: self.0.dump().3.get(pid).unwrap().to_string(),
+                    code: all_policies.get(pid).unwrap().to_string(),
                 }),
                 checks: checks
                     .into_iter()
@@ -838,6 +839,11 @@ impl PyAuthorizer {
                     .collect(),
             }),
             _ => AuthorizationError::new_err(error.to_string()),
+        })?;
+
+        Ok(MatchedPolicyData {
+            policy_id,
+            code: all_policies.get(policy_id).unwrap().to_string(),
         })
     }
 

@@ -267,7 +267,7 @@ def test_complete_lifecycle():
 
     policy = authorizer.authorize()
 
-    assert policy == 0
+    assert policy == {'code': 'allow if user("1234")', 'policy_id': 0}
 
     rule = Rule("u($id) <- user($id), $id == {id}", { 'id': "1234"})
     facts = authorizer.query(rule)
@@ -300,7 +300,7 @@ def test_snapshot():
 
     policy = parsed.authorize()
 
-    assert policy == 0
+    assert policy == {'code': 'allow if user("1234")', 'policy_id': 0}
 
     rule = Rule("u($id) <- user($id), $id == {id}", { 'id': "1234"})
     facts = parsed.query(rule)
@@ -315,7 +315,7 @@ def test_snapshot():
 
     raw_policy = parsed_from_raw.authorize()
 
-    assert raw_policy == 0
+    assert raw_policy == {'code': 'allow if user("1234")', 'policy_id': 0}
 
     rule = Rule("u($id) <- user($id), $id == {id}", { 'id': "1234"})
     raw_facts = parsed_from_raw.query(rule)
@@ -471,5 +471,4 @@ def test_extern_func():
       'other': lambda x : x == 2,
     })
     policy = authorizer.build_unauthenticated().authorize()
-    assert policy == 0
-
+    assert policy == {'code': 'allow if 1.extern::test(1)', 'policy_id': 0}
