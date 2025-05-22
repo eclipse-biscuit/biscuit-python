@@ -74,7 +74,7 @@ Parse and authorize a biscuit token
 >>> token = Biscuit.from_base64("En0KEwoEMTIzNBgDIgkKBwgKEgMYgAgSJAgAEiCp8D9laR_CXmFmiUlo6zi8L63iapXDxX1evELp4HVaBRpAx3Mkwu2f2AcNq48IZwu-pxACq1stL76DSMGEugmiduuTVwMqLmgKZ4VFgzeydCrYY_Id3MkxgTgjXzEHUH4DDSIiCiB55I7ykL9wQXHRDqUnSgZwCdYNdO7c8LZEj0VH5sy3-Q==", public_key)
 >>> authorizer = AuthorizerBuilder( """ time({now}); allow if user($u); """, { 'now': datetime.now(tz = timezone.utc)} ).build(token)
 >>> authorizer.authorize()
-0
+{'policy_id': 0, 'code': 'allow if user($u)'}
 
 In order to help with key rotation, biscuit tokens can optionally carry a root key identifier, helping the verifying party choose between several valid public keys.
 
@@ -88,7 +88,7 @@ In order to help with key rotation, biscuit tokens can optionally carry a root k
 >>> token = Biscuit.from_base64("CAESfQoTCgQxMjM0GAMiCQoHCAoSAxiACBIkCAASII5WVsvM52T91C12wnzButmyzmtGSX_rbM6hCSIJihX2GkDwAcVxTnY8aeMLm-i2R_VzTfIMQZya49ogXO2h2Fg2TJsDcG3udIki9il5PA05lKUwrfPNroS7Qg5e04AyLLcHIiIKII5rh75jrCrgE6Rzw6GVYczMn1IOo287uO4Ef5wp7obY", public_key_fn)
 >>> authorizer = AuthorizerBuilder( """ time({now}); allow if user($u); """, { 'now': datetime.now(tz = timezone.utc)} ).build(token)
 >>> authorizer.authorize()
-0
+{'policy_id': 0, 'code': 'allow if user($u)'}
 
 It is possible to parse a biscuit token without verifying its signatures,for instance to inspect its contents, extract revocation ids or append a block.
 
