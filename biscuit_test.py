@@ -463,3 +463,28 @@ def test_extern_func():
     policy = authorizer.build_unauthenticated().authorize()
     assert policy == 0
 
+def test_append_third_party():
+    root_kp = KeyPair()
+    biscuit_builder = BiscuitBuilder("user({id})", { 'id': "1234" })
+    biscuit = biscuit_builder.build(root_kp.private_key)
+
+    third_party_kp = KeyPair()
+    third_party_block = BlockBuilder("external_fact({fact})", { 'fact': "56" })
+    biscuit_with_third_party_block = biscuit.append_third_party(third_party_kp, third_party_block)
+
+    assert repr(biscuit_with_third_party_block.block_external_key(1)) == repr(third_party_kp.public_key)
+
+def test_read_third_party_facts():
+    root_kp = KeyPair()
+    biscuit_builder = BiscuitBuilder("user({id})", { 'id': "1234" })
+    biscuit = biscuit_builder.build(root_kp.private_key)
+
+    third_party_kp = KeyPair()
+    third_party_block = BlockBuilder("external_fact({fact})", { 'fact': "56" })
+    biscuit_with_third_party_block = biscuit.append_third_party(third_party_kp, third_party_block)
+
+    authorizer  = AuthorizerBuilder("allow if true").build(biscuit_with_third_party_block)
+    rule = Rule(f"ext_fact($fact) <- external_fact($fact) trusting {third_party_kp.public_key}")
+    facts = authorizer.query(rule)
+
+    assert facts[0].terms[0] == "56"

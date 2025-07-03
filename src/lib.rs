@@ -397,6 +397,36 @@ impl PyBiscuit {
             .map(PyBiscuit)
     }
 
+    /// Create a new `Biscuit` by appending a third party attenuation block
+    ///
+    /// :param kp: keypair used to sign the block
+    /// :type kp: KeyPair
+    /// :param block: a builder for the new block
+    /// :type block: BlockBuilder
+    /// :return: the attenuated biscuit
+    /// :rtype: Biscuit
+    pub fn append_third_party(
+        &self,
+        kp: &PyKeyPair,
+        block: &PyBlockBuilder,
+    ) -> PyResult<PyBiscuit> {
+        let third_party_block = self
+            .0
+            .third_party_request()
+            .and_then(|req| {
+                req.create_block(
+                    &kp.private_key().0,
+                    block.0.clone().expect("builder already consumed"),
+                )
+            })
+            .map_err(|e| BiscuitBuildError::new_err(e.to_string()))?;
+
+        self.0
+            .append_third_party(kp.public_key().0, third_party_block)
+            .map_err(|e| BiscuitBuildError::new_err(e.to_string()))
+            .map(PyBiscuit)
+    }
+
     /// The revocation ids of the token, encoded as hexadecimal strings
     #[getter]
     pub fn revocation_ids(&self) -> Vec<String> {
@@ -405,6 +435,21 @@ impl PyBiscuit {
             .into_iter()
             .map(hex::encode)
             .collect()
+    }
+
+    /// Get the external key of a block if it exists
+    ///
+    /// :param index: the block index
+    /// :type index: int
+    /// :return: the public key if it exists
+    /// :rtype: str | None
+    pub fn block_external_key(&self, index: usize) -> PyResult<Option<PyPublicKey>> {
+        let opt_key = self
+            .0
+            .block_external_key(index)
+            .map_err(|e| BiscuitBlockError::new_err(e.to_string()))?;
+
+        Ok(opt_key.map(PyPublicKey))
     }
 
     fn __repr__(&self) -> String {
