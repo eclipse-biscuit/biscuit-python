@@ -1065,6 +1065,7 @@ impl PyBlockBuilder {
     }
 }
 
+/// Third party block request
 #[pyclass(name = "ThirdPartyRequest")]
 pub struct PyThirdPartyRequest(Option<ThirdPartyRequest>);
 
@@ -1097,6 +1098,7 @@ impl PyThirdPartyRequest {
     }
 }
 
+/// Third party block contents
 #[pyclass(name = "ThirdPartyBlock")]
 pub struct PyThirdPartyBlock(ThirdPartyBlock);
 
@@ -1706,6 +1708,8 @@ pub fn biscuit_auth(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<PyPolicy>()?;
     m.add_class::<PyUnverifiedBiscuit>()?;
     m.add_class::<PyAlgorithm>()?;
+    m.add_class::<PyThirdPartyRequest>()?;
+    m.add_class::<PyThirdPartyBlock>()?;
 
     m.add("DataLogError", py.get_type::<DataLogError>())?;
     m.add("AuthorizationError", py.get_type::<AuthorizationError>())?;

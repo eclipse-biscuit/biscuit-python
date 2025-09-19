@@ -1,3 +1,7 @@
+# Unreleased
+
+- support for third-party blocks
+
 # 0.4.0-beta.2
  
 - pre-built wheels for python 3.9-3.13
