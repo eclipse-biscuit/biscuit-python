@@ -178,9 +178,37 @@ class Biscuit:
     # :rtype: Biscuit
     def append(self, block: BlockBuilder) -> Biscuit: ...
 
+    # Create a new `Biscuit` by appending a third-party attenuation block
+    #
+    # :param external_key: the public key of the third-party that signed the block.
+    # :type external_key: PublicKey
+    # :param block: the third party block to append
+    # :type block: ThirdPartyBlock
+    # :return: the attenuated biscuit
+    # :rtype: Biscuit
+    def append_third_party(
+        self,
+        external_key: PublicKey,
+        block: ThirdPartyBlock,
+    ) -> Biscuit: ...
+
+    # Create a third-party request for generating third-party blocks.
+    #
+    # :return: the third-party request
+    # :rtype: ThirdPartyRequest
+    def third_party_request(self) -> ThirdPartyRequest: ...
+
     # The revocation ids of the token, encoded as hexadecimal strings
     @property
     def revocation_ids(self) -> List[str]: ...
+
+    # Get the external key of a block if it exists
+    #
+    # :param index: the block index
+    # :type index: int
+    # :return: the public key if it exists
+    # :rtype: str | None
+    def block_external_key(self, index: int) -> str | None: ...
 
 class AuthorizerBuilder:
     # Create a new authorizer from a datalog snippet and optional parameter values
@@ -597,3 +625,23 @@ class UnverifiedBiscuit:
     @property
     def revocation_ids(self) -> List[str]: ...
     def verify(self, root: PublicKey) -> Biscuit: ...
+
+class ThirdPartyRequest:
+    # Create a third-party block
+    #
+    # :param private_key: the third-party's private key used to sign the block
+    # :type external_key: PrivateKey
+    # :param block: the block builder to be signed
+    # :type block: BlockBuilder
+    # :return: a signed block that can be appended to a Biscuit
+    # :rtype: ThirdPartyBlock
+    #
+    # :note: this method consumes the `ThirdPartyRequest` object.
+    def create_block(
+        self,
+        private_key: PrivateKey,
+        block: BlockBuilder
+    ) -> ThirdPartyBlock: ...
+
+class ThirdPartyBlock:
+    pass
