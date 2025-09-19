@@ -1,6 +1,7 @@
 # Unreleased
 
 - support for third-party blocks
+- biscuit-rust 6.0.0
 
 # 0.4.0-beta.2
  
