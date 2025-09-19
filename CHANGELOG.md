@@ -1,3 +1,8 @@
+# 0.4.0-beta.3
+
+- support for third-party blocks
+- biscuit-rust 6.0.0
+
 # 0.4.0-beta.2
  
 - pre-built wheels for python 3.9-3.13

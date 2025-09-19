@@ -626,6 +626,7 @@ class UnverifiedBiscuit:
     def revocation_ids(self) -> List[str]: ...
     def verify(self, root: PublicKey) -> Biscuit: ...
 
+# Third party block request
 class ThirdPartyRequest:
     # Create a third-party block
     #
@@ -643,5 +644,6 @@ class ThirdPartyRequest:
         block: BlockBuilder
     ) -> ThirdPartyBlock: ...
 
+# Third party block contents
 class ThirdPartyBlock:
     pass
