@@ -117,3 +117,12 @@ Save and load snapshots
 
 >>> snapshot = authorizer.base64_snapshot()
 >>> parsed = Authorizer.from_base64_snapshot(snapshot)
+
+Third-party blocks
+------------------
+
+>>> external_keypair = KeyPair()
+>>> third_party_request = token.third_party_request()
+>>> new_block = BlockBuilder("external(true)")
+>>> third_party_block = third_party_request.create_block(external_keypair.private_key, new_block)
+>>> new_biscuit = token.append_third_party(external_keypair.public_key, third_party_block)
