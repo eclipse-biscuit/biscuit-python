@@ -11,6 +11,8 @@ use ::biscuit_auth::builder::MapKey;
 use ::biscuit_auth::datalog::ExternFunc;
 use ::biscuit_auth::AuthorizerBuilder;
 use ::biscuit_auth::RootKeyProvider;
+use ::biscuit_auth::ThirdPartyBlock;
+use ::biscuit_auth::ThirdPartyRequest;
 use ::biscuit_auth::UnverifiedBiscuit;
 use chrono::DateTime;
 use chrono::Duration;
@@ -397,6 +399,36 @@ impl PyBiscuit {
             .map(PyBiscuit)
     }
 
+    /// Create a new `Biscuit` by appending a third-party attenuation block
+    ///
+    /// :param external_key: the public key of the third-party that signed the block.
+    /// :type external_key: PublicKey
+    /// :param block: the third party block to append
+    /// :type block: ThirdPartyBlock
+    /// :return: the attenuated biscuit
+    /// :rtype: Biscuit
+    pub fn append_third_party(
+        &self,
+        external_key: &PyPublicKey,
+        block: &PyThirdPartyBlock,
+    ) -> PyResult<PyBiscuit> {
+        self.0
+            .append_third_party(external_key.0, block.0.clone())
+            .map_err(|e| BiscuitBuildError::new_err(e.to_string()))
+            .map(PyBiscuit)
+    }
+
+    /// Create a third-party request for generating third-party blocks.
+    ///
+    /// :return: the third-party request
+    /// :rtype: ThirdPartyRequest
+    pub fn third_party_request(&self) -> PyResult<PyThirdPartyRequest> {
+        self.0
+            .third_party_request()
+            .map_err(|e| BiscuitBuildError::new_err(e.to_string()))
+            .map(|request| PyThirdPartyRequest(Some(request)))
+    }
+
     /// The revocation ids of the token, encoded as hexadecimal strings
     #[getter]
     pub fn revocation_ids(&self) -> Vec<String> {
@@ -405,6 +437,21 @@ impl PyBiscuit {
             .into_iter()
             .map(hex::encode)
             .collect()
+    }
+
+    /// Get the external key of a block if it exists
+    ///
+    /// :param index: the block index
+    /// :type index: int
+    /// :return: the public key if it exists
+    /// :rtype: str | None
+    pub fn block_external_key(&self, index: usize) -> PyResult<Option<PyPublicKey>> {
+        let opt_key = self
+            .0
+            .block_external_key(index)
+            .map_err(|e| BiscuitBlockError::new_err(e.to_string()))?;
+
+        Ok(opt_key.map(PyPublicKey))
     }
 
     fn __repr__(&self) -> String {
@@ -1017,6 +1064,41 @@ impl PyBlockBuilder {
         }
     }
 }
+
+#[pyclass(name = "ThirdPartyRequest")]
+pub struct PyThirdPartyRequest(Option<ThirdPartyRequest>);
+
+#[pymethods]
+impl PyThirdPartyRequest {
+    /// Create a third-party block
+    ///
+    /// :param private_key: the third-party's private key used to sign the block
+    /// :type external_key: PrivateKey
+    /// :param block: the block builder to be signed
+    /// :type block: BlockBuilder
+    /// :return: a signed block that can be appended to a Biscuit
+    /// :rtype: ThirdPartyBlock
+    ///
+    /// :note: this method consumes the `ThirdPartyRequest` object.
+    pub fn create_block(
+        &mut self,
+        private_key: &PyPrivateKey,
+        block: &PyBlockBuilder,
+    ) -> PyResult<PyThirdPartyBlock> {
+        self.0
+            .take()
+            .expect("third party request already consumed")
+            .create_block(
+                &private_key.0,
+                block.0.clone().expect("builder already consumed"),
+            )
+            .map_err(|e| BiscuitBuildError::new_err(e.to_string()))
+            .map(PyThirdPartyBlock)
+    }
+}
+
+#[pyclass(name = "ThirdPartyBlock")]
+pub struct PyThirdPartyBlock(ThirdPartyBlock);
 
 /// ed25519 keypair
 #[pyclass(name = "KeyPair")]
