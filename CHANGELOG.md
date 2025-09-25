@@ -1,16 +1,9 @@
-# 0.4.0-beta.3
+# 0.4.0
 
-- support for third-party blocks
 - biscuit-rust 6.0.0
-
-# 0.4.0-beta.2
- 
+- support for third-party blocks (#46, #47)
 - pre-built wheels for python 3.9-3.13
 - pre-built wheels for musl
- 
-# 0.4.0-beta.1
- 
-- biscuit-rust 6.0.0-beta.3
  
 # 0.3.2
 
