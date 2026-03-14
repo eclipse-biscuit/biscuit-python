@@ -1343,7 +1343,7 @@ fn term_to_py(t: &builder::Term) -> PyResult<Py<PyAny>> {
 
 /// Wrapper for a non-naïve python date
 #[derive(FromPyObject)]
-pub struct PyDate(pub Py<pyo3::types::PyAny>);
+pub struct PyDate(pub Py<PyDateTime>);
 
 impl PartialEq for PyDate {
     fn eq(&self, other: &Self) -> bool {
