@@ -482,7 +482,6 @@ class PublicKey:
     # :type data: str
     # :return: the public key
     # :rtype: PublicKey
-    @classmethod
     def __new__(cls, data: str) -> PublicKey: ...
 
 # ed25519 private key
@@ -508,7 +507,6 @@ class PrivateKey:
     # :type data: str
     # :return: the private key
     # :rtype: PrivateKey
-    @classmethod
     def __new__(cls, data: str) -> PrivateKey: ...
 
 # A single datalog Fact
