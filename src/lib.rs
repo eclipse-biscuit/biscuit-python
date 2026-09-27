@@ -14,7 +14,6 @@ use ::biscuit_auth::RootKeyProvider;
 use ::biscuit_auth::ThirdPartyBlock;
 use ::biscuit_auth::ThirdPartyRequest;
 use ::biscuit_auth::UnverifiedBiscuit;
-use chrono::DateTime;
 use chrono::Duration;
 use chrono::TimeZone;
 use chrono::Utc;
@@ -1326,19 +1325,43 @@ fn inner_term_to_py(t: &builder::Term, py: Python<'_>) -> PyResult<Py<PyAny>> {
         }
         builder::Term::Bytes(bs) => bs.clone().into_py_any(py),
         builder::Term::Bool(b) => (*b).into_py_any(py),
-        _ => Err(DataLogError::new_err("Invalid term value".to_string())),
+        builder::Term::Null => py.None().into_py_any(py),
+        builder::Term::Set(vs) => {
+            let set = PySet::empty(py)?;
+            for v in vs {
+                set.add(inner_term_to_py(v, py)?)?;
+            }
+            set.into_py_any(py)
+        }
+        builder::Term::Array(vs) => {
+            let list = PyList::empty(py);
+            for v in vs {
+                list.append(inner_term_to_py(v, py)?)?;
+            }
+            list.into_py_any(py)
+        }
+        builder::Term::Map(m) => {
+            let dict = PyDict::new(py);
+            for (k, v) in m {
+                let key = match k {
+                    MapKey::Integer(i) => (*i).into_py_any(py)?,
+                    MapKey::Str(s) => s.into_py_any(py)?,
+                    MapKey::Parameter(_) => {
+                        return Err(DataLogError::new_err("Invalid map key".to_string()))
+                    }
+                };
+                dict.set_item(key, inner_term_to_py(v, py)?)?;
+            }
+            dict.into_py_any(py)
+        }
+        builder::Term::Parameter(_) | builder::Term::Variable(_) => {
+            Err(DataLogError::new_err("Invalid term value".to_string()))
+        }
     }
 }
 
 fn term_to_py(t: &builder::Term) -> PyResult<Py<PyAny>> {
-    Python::attach(|py| match t {
-        builder::Term::Parameter(_) => Err(DataLogError::new_err("Invalid term value".to_string())),
-        builder::Term::Variable(_) => Err(DataLogError::new_err("Invalid term value".to_string())),
-        builder::Term::Set(_vs) => todo!(),
-        builder::Term::Array(_vs) => todo!(),
-        builder::Term::Map(_vs) => todo!(),
-        term => inner_term_to_py(term, py),
-    })
+    Python::attach(|py| inner_term_to_py(t, py))
 }
 
 /// Wrapper for a non-naïve python date
