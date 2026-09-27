@@ -130,11 +130,8 @@ Terms of a fact can be extracted to python values.o
 >>> fact.terms
 ['abc', 123, b'\xaa', datetime.datetime(2023, 6, 9, 0, 0, tzinfo=datetime.timezone.utc), True]
 
-.. warning::
-   Extracting sets is not supported yet.
 
->>> Fact("fact({123})").terms
-Traceback (most recent call last):
-    ...
-pyo3_runtime.PanicException: not yet implemented
+>>> fact = Fact("""fact({123}, [123], {"a": 123}, null)""")
+>>> fact.terms
+[{123}, [123], {'a': 123}, None]
 
