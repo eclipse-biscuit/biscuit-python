@@ -642,6 +642,11 @@ class ThirdPartyRequest:
         block: BlockBuilder
     ) -> ThirdPartyBlock: ...
 
+    def __new__ (
+            self,
+            base64=None
+    ) -> ThirdPartyRequest: ...
+
 # Third party block contents
 class ThirdPartyBlock:
     pass

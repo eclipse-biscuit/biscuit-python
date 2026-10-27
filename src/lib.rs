@@ -1064,12 +1064,42 @@ impl PyBlockBuilder {
     }
 }
 
-/// Third party block request
 #[pyclass(name = "ThirdPartyRequest")]
 pub struct PyThirdPartyRequest(Option<ThirdPartyRequest>);
 
 #[pymethods]
 impl PyThirdPartyRequest {
+    /// Build a third-party request from a base64-encoded serialized request.
+    ///
+    /// :param base64: a base64-encoded third-party request
+    /// :type base64: str, optional
+    /// :return: the third-party request
+    /// :rtype: ThirdPartyRequest
+    #[new]
+    #[pyo3(signature = (base64=None))]
+    pub fn new(base64: Option<&str>) -> PyResult<Self> {
+        match base64 {
+            Some(base64) => ThirdPartyRequest::deserialize_base64(base64)
+                .map(|request| PyThirdPartyRequest(Some(request)))
+                .map_err(|error| BiscuitValidationError::new_err(error.to_string())),
+            None => Err(PyValueError::new_err(
+                "ThirdPartyRequest requires a base64 parameter",
+            )),
+        }
+    }
+
+    /// Serializes the third-party request to URL safe base64 data.
+    ///
+    /// :return: the serialized third-party request
+    /// :rtype: str
+    pub fn to_base64(&self) -> PyResult<String> {
+        self.0
+            .as_ref()
+            .ok_or_else(|| PyValueError::new_err("third party request already consumed"))?
+            .serialize_base64()
+            .map_err(|error| BiscuitSerializationError::new_err(error.to_string()))
+    }
+
     /// Create a third-party block
     ///
     /// :param private_key: the third-party's private key used to sign the block

@@ -4,7 +4,10 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from biscuit_auth import Algorithm, KeyPair, Authorizer, AuthorizerBuilder, Biscuit, BiscuitBuilder, BlockBuilder, Check, Fact, KeyPair, Policy, PrivateKey, PublicKey, Rule, UnverifiedBiscuit
+from biscuit_auth import Algorithm, KeyPair, Authorizer, AuthorizerBuilder, Biscuit, BiscuitBuilder, BlockBuilder, \
+    Check, Fact, KeyPair, Policy, PrivateKey, PublicKey, Rule, UnverifiedBiscuit, ThirdPartyRequest, \
+    BiscuitSerializationError, BiscuitValidationError
+
 
 def test_fact():
     fact = Fact('fact(1, true, "", "Test", hex:aabbcc, 2023-04-29T01:00:00Z)')
@@ -511,3 +514,40 @@ def test_read_third_party_facts():
     facts = authorizer.query(rule)
 
     assert facts[0].terms[0] == "56"
+
+def test_third_party_serialize():
+    root_kp = KeyPair()
+    biscuit_builder = BiscuitBuilder("user({id})", { 'id': "1234" })
+    biscuit = biscuit_builder.build(root_kp.private_key)
+
+    third_party_kp = KeyPair()
+    new_block = BlockBuilder("external_fact({fact})", { 'fact': "56" })
+    third_party_request = biscuit.third_party_request()
+
+    b64 = third_party_request.to_base64()
+    assert type(b64) == str
+
+    recovered_request = ThirdPartyRequest(base64=b64)
+    third_party_block = recovered_request.create_block(third_party_kp.private_key, new_block)
+    biscuit_with_third_party_block = biscuit.append_third_party(third_party_kp.public_key, third_party_block)
+
+    assert repr(biscuit_with_third_party_block.block_external_key(1)) == repr(third_party_kp.public_key)
+
+def test_third_party_serialize_fail():
+    root_kp = KeyPair()
+    biscuit_builder = BiscuitBuilder("user({id})", { 'id': "1234" })
+    biscuit = biscuit_builder.build(root_kp.private_key)
+
+    third_party_kp = KeyPair()
+    new_block = BlockBuilder("external_fact({fact})", { 'fact': "56" })
+    third_party_request = biscuit.third_party_request()
+
+    b64 = third_party_request.to_base64()
+    assert type(b64) == str
+
+    # reverse the string to make it invalid
+    b64 = b64[::-1]
+
+    # expect an error when trying to decode the invalid b64 string
+    with pytest.raises(BiscuitValidationError):
+        recovered_request = ThirdPartyRequest(base64=b64)
