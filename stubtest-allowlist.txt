@@ -1,0 +1,2 @@
+# compiled submodule, re-exported by the maturin-generated __init__.py
+biscuit_auth.biscuit_auth

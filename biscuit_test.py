@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from biscuit_auth import Algorithm, KeyPair, Authorizer, AuthorizerBuilder, Biscuit, BiscuitBuilder, BlockBuilder, Check, Fact, KeyPair, Policy, PrivateKey, PublicKey, Rule, UnverifiedBiscuit
+from biscuit_auth import Algorithm, Authorizer, AuthorizerBuilder, Biscuit, BiscuitBuilder, BlockBuilder, Check, Fact, Policy, PrivateKey, PublicKey, Rule, UnverifiedBiscuit
 
 def test_fact():
     fact = Fact('fact(1, true, "", "Test", hex:aabbcc, 2023-04-29T01:00:00Z)')
@@ -30,7 +30,7 @@ def test_query_collection_terms():
     assert facts[0].terms == [{1, 2, 3}, [4, 5], {"k": 6}, None]
 
 def test_biscuit_builder():
-    kp = KeyPair()
+    private_key = PrivateKey.random()
     pubkey = PublicKey("ed25519/acdd6d5b53bfee478bf689f8e012fe7988bf755e3d7c5152947abc149bc20189")
 
     builder = BiscuitBuilder(
@@ -95,7 +95,7 @@ check if fact($var, true) trusting ed25519/acdd6d5b53bfee478bf689f8e012fe7988bf7
 check if add_code(true, true) trusting ed25519/acdd6d5b53bfee478bf689f8e012fe7988bf755e3d7c5152947abc149bc20189;
 """
 
-    builder.build(kp.private_key)
+    builder.build(private_key)
     assert True
 
 def test_block_builder():
@@ -219,26 +219,27 @@ def test_authorizer_limits():
     auth = AuthorizerBuilder()
     limits = auth.limits()
     limits.max_time = timedelta(microseconds=2000)
+    limits.max_steps = 42
     auth.set_limits(limits)
     limits = auth.limits()
     assert limits.max_time.microseconds == 2000
+    assert limits.max_steps == 42
 
 
 def test_key_selection():
     private_key = PrivateKey("ed25519-private/473b5189232f3f597b5c2f3f9b0d5e28b1ee4e7cce67ec6b7fbf5984157a6b97")
-    root = KeyPair.from_private_key(private_key)
-    other_root = KeyPair()
+    other_private_key = PrivateKey.random()
 
     def choose_key(kid):
         if kid is None:
-            return other_root.public_key
+            return other_private_key.public_key
         elif kid == 1:
-            return root.public_key
+            return private_key.public_key
         else:
             raise Exception("Unknown key identifier")
 
     biscuit_builder0 = BiscuitBuilder("user({id})", { 'id': "1234" })
-    token0 = biscuit_builder0.build(other_root.private_key).to_base64()
+    token0 = biscuit_builder0.build(other_private_key).to_base64()
     biscuit_builder1 = BiscuitBuilder("user({id})", { 'id': "1234" })
     biscuit_builder1.set_root_key_id(1)
     token1 = biscuit_builder1.build(private_key).to_base64()
@@ -248,7 +249,7 @@ def test_key_selection():
 
 
     Biscuit.from_base64(token0, choose_key)
-    Biscuit.from_base64(token0, other_root.public_key)
+    Biscuit.from_base64(token0, other_private_key.public_key)
     Biscuit.from_base64(token1, choose_key)
     try:
       Biscuit.from_base64(token2, choose_key)
@@ -257,7 +258,6 @@ def test_key_selection():
 
 def test_complete_lifecycle():
     private_key = PrivateKey("ed25519-private/473b5189232f3f597b5c2f3f9b0d5e28b1ee4e7cce67ec6b7fbf5984157a6b97")
-    root = KeyPair.from_private_key(private_key)
 
     biscuit_builder = BiscuitBuilder("user({id})", { 'id': "1234" })
 
@@ -266,7 +266,7 @@ def test_complete_lifecycle():
 
     token = biscuit_builder.build(private_key).append(BlockBuilder('check if user($u)')).to_base64()
 
-    parsedToken = Biscuit.from_base64(token, root.public_key)
+    parsedToken = Biscuit.from_base64(token, private_key.public_key)
 
     authorizer = AuthorizerBuilder("allow if user({id})", { 'id': "1234" })
 
@@ -286,7 +286,6 @@ def test_complete_lifecycle():
 
 def test_snapshot():
     private_key = PrivateKey("ed25519-private/473b5189232f3f597b5c2f3f9b0d5e28b1ee4e7cce67ec6b7fbf5984157a6b97")
-    root = KeyPair.from_private_key(private_key)
 
     biscuit_builder = BiscuitBuilder("user({id})", { 'id': "1234" })
 
@@ -295,7 +294,7 @@ def test_snapshot():
 
     token = biscuit_builder.build(private_key).append(BlockBuilder('check if user($u)')).to_base64()
 
-    parsedToken = Biscuit.from_base64(token, root.public_key)
+    parsedToken = Biscuit.from_base64(token, private_key.public_key)
 
     authorizer = AuthorizerBuilder("allow if user({id})", { 'id': "1234" })
 
@@ -385,7 +384,7 @@ def test_private_keys():
 
 
 def test_biscuit_inspection():
-    kp = KeyPair()
+    private_key = PrivateKey.random()
     pubkey = PublicKey("ed25519/acdd6d5b53bfee478bf689f8e012fe7988bf755e3d7c5152947abc149bc20189")
 
     builder = BiscuitBuilder(
@@ -398,11 +397,11 @@ def test_biscuit_inspection():
     )
 
     print(builder)
-    token1 = builder.build(kp.private_key)
+    token1 = builder.build(private_key)
     print(token1.to_base64())
 
     builder.set_root_key_id(42)
-    token2 = builder.build(kp.private_key).append(BlockBuilder('test(false);'))
+    token2 = builder.build(private_key).append(BlockBuilder('test(false);'))
     print(token2.to_base64())
 
     utoken1 = UnverifiedBiscuit.from_base64(token1.to_base64())
@@ -453,15 +452,15 @@ def test_append_on_unverified():
 def test_keypair_from_private_key_der():
     private_key_der = bytes.fromhex("302e020100300506032b6570042204200499694d0da05dcac40052663e71d50c1539465f8926dfe92033cf7aaad53d65")
     private_key_hex = "ed25519-private/0499694d0da05dcac40052663e71d50c1539465f8926dfe92033cf7aaad53d65"
-    kp = KeyPair.from_private_key(PrivateKey.from_der(der=private_key_der))
-    assert repr(kp.private_key) == private_key_hex
+    private_key = PrivateKey.from_der(der=private_key_der)
+    assert repr(private_key) == private_key_hex
 
 
 def test_keypair_from_private_key_pem():
     private_key_pem = "-----BEGIN PRIVATE KEY-----\nMC4CAQAwBQYDK2VwBCIEIASZaU0NoF3KxABSZj5x1QwVOUZfiSbf6SAzz3qq1T1l\n-----END PRIVATE KEY-----"
     private_key_hex = "ed25519-private/0499694d0da05dcac40052663e71d50c1539465f8926dfe92033cf7aaad53d65"
-    kp = KeyPair.from_private_key(PrivateKey.from_pem(pem=private_key_pem))
-    assert repr(kp.private_key) == private_key_hex
+    private_key = PrivateKey.from_pem(pem=private_key_pem)
+    assert repr(private_key) == private_key_hex
 
 def test_extern_func():
     def test(left, right):
@@ -482,32 +481,32 @@ def test_extern_func():
     assert policy == 0
 
 def test_append_third_party():
-    root_kp = KeyPair()
+    root_private_key = PrivateKey.random()
     biscuit_builder = BiscuitBuilder("user({id})", { 'id': "1234" })
-    biscuit = biscuit_builder.build(root_kp.private_key)
+    biscuit = biscuit_builder.build(root_private_key)
 
-    third_party_kp = KeyPair()
+    third_party_private_key = PrivateKey.random()
     new_block = BlockBuilder("external_fact({fact})", { 'fact': "56" })
     third_party_request = biscuit.third_party_request()
-    third_party_block = third_party_request.create_block(third_party_kp.private_key, new_block)
-    biscuit_with_third_party_block = biscuit.append_third_party(third_party_kp.public_key, third_party_block)
+    third_party_block = third_party_request.create_block(third_party_private_key, new_block)
+    biscuit_with_third_party_block = biscuit.append_third_party(third_party_private_key.public_key, third_party_block)
 
-    assert repr(biscuit_with_third_party_block.block_external_key(1)) == repr(third_party_kp.public_key)
+    assert repr(biscuit_with_third_party_block.block_external_key(1)) == repr(third_party_private_key.public_key)
 
 def test_read_third_party_facts():
-    root_kp = KeyPair()
+    root_private_key = PrivateKey.random()
     biscuit_builder = BiscuitBuilder("user({id})", { 'id': "1234" })
-    biscuit = biscuit_builder.build(root_kp.private_key)
+    biscuit = biscuit_builder.build(root_private_key)
 
-    third_party_kp = KeyPair()
+    third_party_private_key = PrivateKey.random()
     new_block = BlockBuilder("external_fact({fact})", { 'fact': "56" })
     third_party_request = biscuit.third_party_request()
-    third_party_block = third_party_request.create_block(third_party_kp.private_key, new_block)
-    biscuit_with_third_party_block = biscuit.append_third_party(third_party_kp.public_key, third_party_block)
+    third_party_block = third_party_request.create_block(third_party_private_key, new_block)
+    biscuit_with_third_party_block = biscuit.append_third_party(third_party_private_key.public_key, third_party_block)
 
 
     authorizer  = AuthorizerBuilder("allow if true").build(biscuit_with_third_party_block)
-    rule = Rule(f"ext_fact($fact) <- external_fact($fact) trusting {third_party_kp.public_key}")
+    rule = Rule(f"ext_fact($fact) <- external_fact($fact) trusting {third_party_private_key.public_key}")
     facts = authorizer.query(rule)
 
     assert facts[0].terms[0] == "56"
