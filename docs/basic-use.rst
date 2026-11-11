@@ -2,26 +2,23 @@ Basic use
 =========
 
 
->>> from biscuit_auth import Authorizer, AuthorizerBuilder, Biscuit, BiscuitBuilder, BlockBuilder, KeyPair, PrivateKey, PublicKey, Rule, UnverifiedBiscuit
+>>> from biscuit_auth import Authorizer, AuthorizerBuilder, Biscuit, BiscuitBuilder, BlockBuilder, PrivateKey, PublicKey, Rule, UnverifiedBiscuit
 >>> from datetime import datetime, timedelta, timezone
 
-Create and manage keypairs
---------------------------
+Create and manage keys
+----------------------
 
->>> # random keypair
->>> keypair = KeyPair()
->>> # serialize a keypair to hexadecimal strings
->>> private_key_str = repr(keypair.private_key)
->>> public_key_str = repr(keypair.public_key)
+>>> # random private key
+>>> private_key = PrivateKey.random()
+>>> # serialize keys to hexadecimal strings
+>>> private_key_str = repr(private_key)
+>>> public_key_str = repr(private_key.public_key)
 >>> # parse a private key from an hex string
 >>> parsed_private_key = PrivateKey("ed25519-private/23d9d45b32899eefd4cde9a2caecdd41f0449c95ee1e4c6b53ef38cb957dd690")
 >>> # parse a public key from an hex string
 >>> parsed_public_key = PublicKey("ed25519/9e124fbb46ff99a87219aef4b09f4f6c3b7fd96b7bd279e38af3ef429a101c69")
->>> # build a keypair from a private key
->>> parsed_keypair = KeyPair.from_private_key(parsed_private_key)
->>> parsed_keypair.private_key
-ed25519-private/23d9d45b32899eefd4cde9a2caecdd41f0449c95ee1e4c6b53ef38cb957dd690
->>> parsed_keypair.public_key
+>>> # get the public key from a private key
+>>> parsed_private_key.public_key
 ed25519/9e124fbb46ff99a87219aef4b09f4f6c3b7fd96b7bd279e38af3ef429a101c69
 
 Build a biscuit token
@@ -121,8 +118,8 @@ Save and load snapshots
 Third-party blocks
 ------------------
 
->>> external_keypair = KeyPair()
+>>> external_private_key = PrivateKey.random()
 >>> third_party_request = token.third_party_request()
 >>> new_block = BlockBuilder("external(true)")
->>> third_party_block = third_party_request.create_block(external_keypair.private_key, new_block)
->>> new_biscuit = token.append_third_party(external_keypair.public_key, third_party_block)
+>>> third_party_block = third_party_request.create_block(external_private_key, new_block)
+>>> new_biscuit = token.append_third_party(external_private_key.public_key, third_party_block)

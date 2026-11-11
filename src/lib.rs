@@ -24,7 +24,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use ::biscuit_auth::{
-    builder, error, Authorizer, AuthorizerLimits, Biscuit, KeyPair, PrivateKey, PublicKey,
+    builder, error, Authorizer, AuthorizerLimits, Biscuit, PrivateKey, PublicKey,
 };
 
 use pyo3::exceptions::PyValueError;
@@ -89,6 +89,8 @@ struct PyKeyProvider {
 }
 
 impl RootKeyProvider for PyKeyProvider {
+    type Key = PublicKey;
+
     fn choose(&self, kid: Option<u32>) -> Result<PublicKey, error::Format> {
         Python::attach(|py| {
             let bound = self.py_value.bind(py);
@@ -152,12 +154,11 @@ impl PyBiscuitBuilder {
     /// :return: a biscuit token
     /// :rtype: Biscuit
     pub fn build(&self, root: &PyPrivateKey) -> PyResult<PyBiscuit> {
-        let keypair = KeyPair::from(&root.0);
         Ok(PyBiscuit(
             self.0
                 .clone()
                 .expect("builder already consumed")
-                .build(&keypair)
+                .build(&root.0)
                 .map_err(|e| BiscuitBuildError::new_err(e.to_string()))?,
         ))
     }
@@ -190,7 +191,7 @@ impl PyBiscuitBuilder {
         if let Some(scope_parameters) = scope_parameters {
             scope_params = scope_parameters
                 .iter()
-                .map(|(k, v)| (k.to_string(), v.0))
+                .map(|(k, v)| (k.to_string(), v.0.into()))
                 .collect();
         } else {
             scope_params = HashMap::new();
@@ -478,6 +479,8 @@ pub struct PyAuthorizerLimits {
     pub max_iterations: u64,
     #[pyo3(get, set)]
     pub max_time: Duration,
+    #[pyo3(get, set)]
+    pub max_steps: u64,
 }
 
 #[pymethods]
@@ -532,7 +535,7 @@ impl PyAuthorizerBuilder {
         if let Some(scope_parameters) = scope_parameters {
             scope_params = scope_parameters
                 .iter()
-                .map(|(k, v)| (k.to_string(), v.0))
+                .map(|(k, v)| (k.to_string(), v.0.into()))
                 .collect();
         } else {
             scope_params = HashMap::new();
@@ -629,6 +632,7 @@ impl PyAuthorizerBuilder {
             max_facts: limits.max_facts,
             max_iterations: limits.max_iterations,
             max_time: Duration::from_std(limits.max_time).expect("Duration out of range"),
+            max_steps: limits.max_steps,
         })
     }
 
@@ -641,6 +645,7 @@ impl PyAuthorizerBuilder {
                 max_facts: limits.max_facts,
                 max_iterations: limits.max_iterations,
                 max_time: Duration::to_std(&limits.max_time).expect("Duration out of range"),
+                max_steps: limits.max_steps,
             },
         ));
 
@@ -1040,7 +1045,7 @@ impl PyBlockBuilder {
         if let Some(scope_parameters) = scope_parameters {
             scope_params = scope_parameters
                 .iter()
-                .map(|(k, v)| (k.to_string(), v.0))
+                .map(|(k, v)| (k.to_string(), v.0.into()))
                 .collect();
         } else {
             scope_params = HashMap::new();
@@ -1100,48 +1105,6 @@ impl PyThirdPartyRequest {
 /// Third party block contents
 #[pyclass(name = "ThirdPartyBlock")]
 pub struct PyThirdPartyBlock(ThirdPartyBlock);
-
-/// ed25519 keypair
-#[pyclass(name = "KeyPair")]
-pub struct PyKeyPair(KeyPair);
-
-#[pymethods]
-impl PyKeyPair {
-    /// Generate a random keypair
-    #[new]
-    pub fn new() -> Self {
-        PyKeyPair(KeyPair::new())
-    }
-
-    /// Generate a keypair from a private key
-    ///
-    /// :param private_key: the private key
-    /// :type private_key: PrivateKey
-    /// :return: the corresponding keypair
-    /// :rtype: KeyPair
-    #[classmethod]
-    pub fn from_private_key(_: &Bound<PyType>, private_key: PyPrivateKey) -> Self {
-        PyKeyPair(KeyPair::from(&private_key.0))
-    }
-
-    /// The public key part
-    #[getter]
-    pub fn public_key(&self) -> PyPublicKey {
-        PyPublicKey(self.0.public())
-    }
-
-    /// The private key part
-    #[getter]
-    pub fn private_key(&self) -> PyPrivateKey {
-        PyPrivateKey(self.0.private())
-    }
-}
-
-impl Default for PyKeyPair {
-    fn default() -> Self {
-        Self::new()
-    }
-}
 
 /// ed25519 public key
 #[derive(Clone)]
@@ -1300,6 +1263,18 @@ impl PyPrivateKey {
             Ok(key) => Ok(PyPrivateKey(key)),
             Err(error) => Err(PyValueError::new_err(error.to_string())),
         }
+    }
+
+    /// Generate a random keypair
+    #[classmethod]
+    pub fn random(_: &Bound<PyType>) -> Self {
+        PyPrivateKey(PrivateKey::new())
+    }
+
+    /// The public key part
+    #[getter]
+    pub fn public_key(&self) -> PyPublicKey {
+        PyPublicKey(self.0.public())
     }
 }
 
@@ -1719,7 +1694,6 @@ impl PyUnverifiedBiscuit {
 /// Main module for the biscuit_auth lib
 #[pymodule]
 pub fn biscuit_auth(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
-    m.add_class::<PyKeyPair>()?;
     m.add_class::<PyPublicKey>()?;
     m.add_class::<PyPrivateKey>()?;
     m.add_class::<PyBiscuit>()?;

@@ -1,3 +1,9 @@
+# 0.5.0
+
+- biscuit-rust 7.0.0
+- support for configurable step limits
+- BREAKING: `KeyPair` is removed, use `PrivateKey` directly instead
+
 # 0.4.0
 
 - biscuit-rust 6.0.0
