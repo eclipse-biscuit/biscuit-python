@@ -3,7 +3,38 @@ Type stubs for lib.rs
 """
 
 from __future__ import annotations
-from typing import Callable, Optional, Mapping, Any, List, Union, TypeAlias
+from datetime import timedelta
+from typing import Callable, Optional, Mapping, Any, List, Union, TypeAlias, final
+
+__all__ = [
+    "PublicKey",
+    "PrivateKey",
+    "Biscuit",
+    "BiscuitBuilder",
+    "BlockBuilder",
+    "Authorizer",
+    "AuthorizerBuilder",
+    "AuthorizerLimits",
+    "Fact",
+    "Rule",
+    "Check",
+    "Policy",
+    "UnverifiedBiscuit",
+    "Algorithm",
+    "ThirdPartyRequest",
+    "ThirdPartyBlock",
+    "DataLogError",
+    "AuthorizationError",
+    "BiscuitBuildError",
+    "BiscuitBlockError",
+    "BiscuitValidationError",
+    "BiscuitSerializationError",
+    "Parameters",
+    "ScopeParameters",
+    "PublicKeyProvider",
+    "ExternFunc",
+    "Term",
+]
 
 class DataLogError(Exception):
     pass
@@ -23,19 +54,28 @@ class BiscuitSerializationError(Exception):
 class BiscuitBlockError(Exception):
     pass
 
+# Also defined at runtime, in add_type_aliases (src/lib.rs). Keep both in sync.
+
+#: A datalog term, as a python value: `int`, `str`, `bytes`, `bool`, `datetime` (with a timezone),
+#: a `set` of those, a `list` of terms, or a `dict` with `str` or `int` keys and term values
 Term: TypeAlias = Any
+#: Values for the parameters (`{name}`) in a datalog snippet, indexed by parameter name
 Parameters: TypeAlias = Optional[Mapping[str, Term]]
+#: Public keys for the public key parameters (`trusting {name}`) in a datalog snippet, indexed by parameter name
 ScopeParameters: TypeAlias = Optional[Mapping[str, PublicKey]]
-PrivateKeyProvider: TypeAlias = Union[
-    Callable[[], PrivateKey], Callable[[int], PrivateKey]
-]
-PublicKeyProvider: TypeAlias = Union[
-    Callable[[], PublicKey], Callable[[int], PublicKey]
-]
+#: A function selecting the root public key used to verify a token. It is called
+#: with the token's root key id (or `None` if it does not have one)
+PublicKeyProvider: TypeAlias = Callable[[Optional[int]], PublicKey]
+#: An external function, called by the datalog `.extern::name()` operations. It is called
+#: with one argument for unary operations and two for binary operations, and returns a term
+ExternFunc: TypeAlias = Union[Callable[[Term], Term], Callable[[Term, Term], Term]]
 
+@final
 class Algorithm:
-    pass
+    Ed25519: Algorithm
+    Secp256r1: Algorithm
 
+@final
 class BiscuitBuilder:
     # Create a builder from a datalog snippet and optional parameter values
     #
@@ -58,7 +98,7 @@ class BiscuitBuilder:
     # :type root: PrivateKey
     # :return: a biscuit token
     # :rtype: Biscuit
-    def build(self, root: PrivateKey | PrivateKeyProvider) -> Biscuit: ...
+    def build(self, root: PrivateKey) -> Biscuit: ...
 
     # Add code to the builder, using the provided parameters.
     #
@@ -70,7 +110,7 @@ class BiscuitBuilder:
     # :type scope_parameters: dict, optional
     def add_code(
         self,
-        source: Optional[str] = None,
+        source: str,
         parameters: Parameters = None,
         scope_parameters: ScopeParameters = None,
     ) -> None: ...
@@ -108,6 +148,7 @@ class BiscuitBuilder:
     # :type root_key_id: int
     def set_root_key_id(self, root_key_id: int) -> None: ...
 
+@final
 class Biscuit:
     # Creates a BiscuitBuilder
     #
@@ -147,8 +188,8 @@ class Biscuit:
     # Serializes to raw bytes
     #
     # :return: the serialized biscuit
-    # :rtype: list
-    def to_bytes(self) -> List[int]: ...
+    # :rtype: bytes
+    def to_bytes(self) -> bytes: ...
 
     # Serializes to URL safe base 64 data
     #
@@ -207,9 +248,18 @@ class Biscuit:
     # :param index: the block index
     # :type index: int
     # :return: the public key if it exists
-    # :rtype: str | None
-    def block_external_key(self, index: int) -> str | None: ...
+    # :rtype: PublicKey | None
+    def block_external_key(self, index: int) -> Optional[PublicKey]: ...
 
+# Runtime limits of the authorizer
+@final
+class AuthorizerLimits:
+    max_facts: int
+    max_iterations: int
+    max_time: timedelta
+    max_steps: int
+
+@final
 class AuthorizerBuilder:
     # Create a new authorizer from a datalog snippet and optional parameter values
     #
@@ -236,7 +286,7 @@ class AuthorizerBuilder:
     # :type scope_parameters: dict, optional
     def add_code(
         self,
-        source: Optional[str] = None,
+        source: str,
         parameters: Parameters = None,
         scope_parameters: ScopeParameters = None,
     ) -> None: ...
@@ -269,17 +319,37 @@ class AuthorizerBuilder:
     # :type policy: Policy
     def add_policy(self, policy: Policy) -> None: ...
 
-    # Merge another `Authorizer` in this `Authorizer`. The `Authorizer` argument will not be modified
+    # Returns the runtime limits of the authorizer
+    def limits(self) -> AuthorizerLimits: ...
+
+    # Sets the runtime limits of the authorizer
     #
-    # :param builder: an Authorizer
-    # :type builder: Authorizer
-    def merge(self, builder: Authorizer) -> None: ...
+    # Those limits cover all the executions under the `authorize`, `query` and `query_all` methods
+    def set_limits(self, limits: AuthorizerLimits) -> None: ...
+
+    # adds a fact `time($current_time)` with the current time
+    def set_time(self) -> None: ...
+
+    # Merge another `AuthorizerBuilder` in this `AuthorizerBuilder`. The `AuthorizerBuilder` argument will not be modified
+    #
+    # :param builder: an AuthorizerBuilder
+    # :type builder: AuthorizerBuilder
+    def merge(self, builder: AuthorizerBuilder) -> None: ...
 
     # Merge a `BlockBuilder` in this `Authorizer`. The `BlockBuilder` will not be modified
     #
     # :param builder: a BlockBuilder
     # :type builder: BlockBuilder
     def merge_block(self, builder: BlockBuilder) -> None: ...
+
+    # Register an external function, called by the datalog `.extern::name()` operations
+    def register_extern_func(self, name: str, func: ExternFunc) -> None: ...
+
+    # Register several external functions
+    def register_extern_funcs(self, funcs: Mapping[str, ExternFunc]) -> None: ...
+
+    # Replace all the registered external functions
+    def set_extern_funcs(self, funcs: Mapping[str, ExternFunc]) -> None: ...
 
     # Take a snapshot of the authorizer builder and return it, base64-encoded
     #
@@ -311,12 +381,21 @@ class AuthorizerBuilder:
     @classmethod
     def from_raw_snapshot(cls, input: bytes) -> AuthorizerBuilder: ...
 
-    # Add a `Biscuit` to this `Authorizer`
+    # Build the `AuthorizerBuilder` with the provided `Biscuit`
     #
     # :param token: the token to authorize
     # :type token: Biscuit
+    # :return: the authorizer
+    # :rtype: Authorizer
     def build(self, token: Biscuit) -> Authorizer: ...
 
+    # Build the `AuthorizerBuilder` without a token
+    #
+    # :return: the authorizer
+    # :rtype: Authorizer
+    def build_unauthenticated(self) -> Authorizer: ...
+
+@final
 class Authorizer:
     # Runs the authorization checks and policies
     #
@@ -370,10 +449,19 @@ class Authorizer:
     def from_raw_snapshot(cls, input: bytes) -> Authorizer: ...
 
 # Builder class allowing to create a block meant to be appended to an existing token
+@final
 class BlockBuilder:
+    # Create a builder from a datalog snippet and optional parameter values
+    #
+    # :param source: a datalog snippet
+    # :type source: str, optional
+    # :param parameters: values for the parameters in the datalog snippet
+    # :type parameters: dict, optional
+    # :param scope_parameters: public keys for the public key parameters in the datalog snippet
+    # :type scope_parameters: dict, optional
     def __new__(
         cls,
-        source: Optional[str],
+        source: Optional[str] = None,
         parameters: Parameters = None,
         scope_parameters: ScopeParameters = None,
     ) -> BlockBuilder: ...
@@ -415,66 +503,30 @@ class BlockBuilder:
     # :type scope_parameters: dict, optional
     def add_code(
         self,
-        source: Optional[str],
+        source: str,
         parameters: Parameters = None,
         scope_parameters: ScopeParameters = None,
     ) -> None: ...
 
-# ed25519 keypair
-class KeyPair:
-    # Generate a random keypair
-    def __new__(cls) -> KeyPair: ...
-
-    # Generate a keypair from a private key
-    #
-    # :param private_key: the private key
-    # :type private_key: PrivateKey
-    # :return: the corresponding keypair
-    # :rtype: KeyPair
-    @classmethod
-    def from_private_key(cls, private_key: PrivateKey) -> KeyPair: ...
-
-    # Generate a keypair from a DER buffer
-    #
-    # :param bytes: private key bytes in DER format
-    # :type private_key: PrivateKey
-    # :return: the corresponding keypair
-    # :rtype: KeyPair
-    @classmethod
-    def from_private_key_der(cls, der: bytes) -> KeyPair: ...
-
-    #
-    # :param bytes: private key bytes in PEM format
-    # :type private_key: PrivateKey
-    # :return: the corresponding keypair
-    # :rtype: KeyPair
-    @classmethod
-    def from_private_key_pem(cls, pem: str) -> KeyPair: ...
-
-    # The public key part
-    @property
-    def public_key(self) -> PublicKey: ...
-
-    # The private key part
-    @property
-    def private_key(self) -> PrivateKey: ...
-
-# ed25519 public key
+# public key
+@final
 class PublicKey:
     # Serializes a public key to raw bytes
     #
     # :return: the public key bytes
-    # :rtype: list
+    # :rtype: bytes
     def to_bytes(self) -> bytes: ...
 
     # Deserializes a public key from raw bytes
     #
     # :param data: the raw bytes
     # :type data: bytes
+    # :param alg: the key algorithm
+    # :type alg: Algorithm
     # :return: the public key
     # :rtype: PublicKey
     @classmethod
-    def from_bytes(cls, data: bytes) -> PublicKey: ...
+    def from_bytes(cls, data: bytes, alg: Algorithm) -> PublicKey: ...
 
     # Deserializes a public key from a hexadecimal string
     #
@@ -484,22 +536,43 @@ class PublicKey:
     # :rtype: PublicKey
     def __new__(cls, data: str) -> PublicKey: ...
 
-# ed25519 private key
-class PrivateKey:
-    # Serializes a public key to raw bytes
+    # Deserializes a public key from a DER buffer
     #
-    # :return: the public key bytes
-    # :rtype: list
+    # :param der: the DER buffer
+    # :type der: bytes
+    # :return: the public key
+    # :rtype: PublicKey
+    @classmethod
+    def from_der(cls, der: bytes) -> PublicKey: ...
+
+    # Deserializes a public key from a PEM string
+    #
+    # :param pem: the PEM string
+    # :type pem: str
+    # :return: the public key
+    # :rtype: PublicKey
+    @classmethod
+    def from_pem(cls, pem: str) -> PublicKey: ...
+
+# private key
+@final
+class PrivateKey:
+    # Serializes a private key to raw bytes
+    #
+    # :return: the private key bytes
+    # :rtype: bytes
     def to_bytes(self) -> bytes: ...
 
     # Deserializes a private key from raw bytes
     #
     # :param data: the raw bytes
     # :type data: bytes
+    # :param alg: the key algorithm
+    # :type alg: Algorithm
     # :return: the private key
     # :rtype: PrivateKey
     @classmethod
-    def from_bytes(cls, data: bytes) -> PrivateKey: ...
+    def from_bytes(cls, data: bytes, alg: Algorithm) -> PrivateKey: ...
 
     # Deserializes a private key from a hexadecimal string
     #
@@ -509,12 +582,39 @@ class PrivateKey:
     # :rtype: PrivateKey
     def __new__(cls, data: str) -> PrivateKey: ...
 
+    # Deserializes a private key from a DER buffer
+    #
+    # :param der: the DER buffer
+    # :type der: bytes
+    # :return: the private key
+    # :rtype: PrivateKey
+    @classmethod
+    def from_der(cls, der: bytes) -> PrivateKey: ...
+
+    # Deserializes a private key from a PEM string
+    #
+    # :param pem: the PEM string
+    # :type pem: str
+    # :return: the private key
+    # :rtype: PrivateKey
+    @classmethod
+    def from_pem(cls, pem: str) -> PrivateKey: ...
+
+    # Generate a random ed25519 private key
+    @classmethod
+    def random(cls) -> PrivateKey: ...
+
+    # The public key part
+    @property
+    def public_key(self) -> PublicKey: ...
+
 # A single datalog Fact
 #
 # :param source: a datalog fact (without the ending semicolon)
 # :type source: str
 # :param parameters: values for the parameters in the datalog fact
 # :type parameters: dict, optional
+@final
 class Fact:
     # Build a datalog fact from the provided source and optional parameter values
     def __new__(cls, source: str, parameters: Parameters = None) -> Fact: ...
@@ -535,6 +635,7 @@ class Fact:
 # :type parameters: dict, optional
 # :param scope_parameters: public keys for the public key parameters in the datalog rule
 # :type scope_parameters: dict, optional
+@final
 class Rule:
     # Build a rule from the source and optional parameter values
     def __new__(
@@ -552,6 +653,7 @@ class Rule:
 # :type parameters: dict, optional
 # :param scope_parameters: public keys for the public key parameters in the datalog check
 # :type scope_parameters: dict, optional
+@final
 class Check:
     # Build a check from the source and optional parameter values
     def __new__(
@@ -569,6 +671,7 @@ class Check:
 # :type parameters: dict, optional
 # :param scope_parameters: public keys for the public key parameters in the datalog policy
 # :type scope_parameters: dict, optional
+@final
 class Policy:
     # Build a check from the source and optional parameter values
     def __new__(
@@ -579,6 +682,7 @@ class Policy:
     ) -> Policy: ...
 
 # Representation of a biscuit token that has been parsed but not cryptographically verified
+@final
 class UnverifiedBiscuit:
     # Deserializes a token from URL safe base 64 data
     #
@@ -622,9 +726,17 @@ class UnverifiedBiscuit:
     # The revocation ids of the token, encoded as hexadecimal strings
     @property
     def revocation_ids(self) -> List[str]: ...
-    def verify(self, root: PublicKey) -> Biscuit: ...
+
+    # Verifies the token signature using the provided root key (or function)
+    #
+    # :param root: either a public key or a function taking an integer (or `None`) and returning an public key
+    # :type root: function,PublicKey
+    # :return: the verified biscuit
+    # :rtype: Biscuit
+    def verify(self, root: PublicKey | PublicKeyProvider) -> Biscuit: ...
 
 # Third party block request
+@final
 class ThirdPartyRequest:
     # Create a third-party block
     #
@@ -643,5 +755,6 @@ class ThirdPartyRequest:
     ) -> ThirdPartyBlock: ...
 
 # Third party block contents
+@final
 class ThirdPartyBlock:
     pass

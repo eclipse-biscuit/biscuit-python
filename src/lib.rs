@@ -1701,6 +1701,7 @@ pub fn biscuit_auth(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<PyBlockBuilder>()?;
     m.add_class::<PyAuthorizer>()?;
     m.add_class::<PyAuthorizerBuilder>()?;
+    m.add_class::<PyAuthorizerLimits>()?;
     m.add_class::<PyFact>()?;
     m.add_class::<PyRule>()?;
     m.add_class::<PyCheck>()?;
@@ -1722,6 +1723,49 @@ pub fn biscuit_auth(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
         "BiscuitSerializationError",
         py.get_type::<BiscuitSerializationError>(),
     )?;
+
+    add_type_aliases(py, m)?;
+
+    Ok(())
+}
+
+/// Runtime versions of the type aliases defined in biscuit_auth.pyi.
+/// Keep both definitions in sync: stubtest only checks the names exist.
+fn add_type_aliases(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
+    let typing = py.import("typing")?;
+    let any = typing.getattr("Any")?;
+    let optional = typing.getattr("Optional")?;
+    let mapping = typing.getattr("Mapping")?;
+    let callable = typing.getattr("Callable")?;
+    let union = typing.getattr("Union")?;
+    let str_type = py.get_type::<PyString>();
+    let int_type = py.get_type::<PyInt>();
+    let public_key = py.get_type::<PyPublicKey>();
+
+    let term = any;
+    m.add(
+        "Parameters",
+        optional.get_item(mapping.get_item((&str_type, &term))?)?,
+    )?;
+    m.add(
+        "ScopeParameters",
+        optional.get_item(mapping.get_item((&str_type, &public_key))?)?,
+    )?;
+    m.add(
+        "PublicKeyProvider",
+        callable.get_item((
+            PyList::new(py, [optional.get_item(&int_type)?])?,
+            &public_key,
+        ))?,
+    )?;
+    m.add(
+        "ExternFunc",
+        union.get_item((
+            callable.get_item((PyList::new(py, [&term])?, &term))?,
+            callable.get_item((PyList::new(py, [&term, &term])?, &term))?,
+        ))?,
+    )?;
+    m.add("Term", term)?;
 
     Ok(())
 }

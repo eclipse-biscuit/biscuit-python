@@ -32,6 +32,9 @@ jobs:
     - name: Test with pytest
       run: |
         pytest
+    - name: Check type stubs against the library
+      run: |
+        python -m mypy.stubtest biscuit_auth --allowlist stubtest-allowlist.txt
     - name: Test documentation
       run: |
         pip install sphinx sphinx-rtd-theme
