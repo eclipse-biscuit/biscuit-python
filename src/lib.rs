@@ -67,11 +67,16 @@ pub enum PyAlgorithm {
     Secp256r1,
 }
 
-impl From<builder::Algorithm> for PyAlgorithm {
-    fn from(value: builder::Algorithm) -> Self {
+impl TryFrom<builder::Algorithm> for PyAlgorithm {
+    type Error = PyErr;
+
+    fn try_from(value: builder::Algorithm) -> PyResult<Self> {
         match value {
-            builder::Algorithm::Ed25519 => Self::Ed25519,
-            builder::Algorithm::Secp256r1 => Self::Secp256r1,
+            builder::Algorithm::Ed25519 => Ok(Self::Ed25519),
+            builder::Algorithm::Secp256r1 => Ok(Self::Secp256r1),
+            _ => Err(PyValueError::new_err(format!(
+                "unsupported algorithm: {value:?}"
+            ))),
         }
     }
 }
@@ -1401,11 +1406,20 @@ impl PyTerm {
     pub fn to_term(&self) -> PyResult<builder::Term> {
         match self {
             PyTerm::Simple(s) => s.to_term(),
-            PyTerm::Set(vs) => vs
-                .iter()
-                .map(|s| s.to_term())
-                .collect::<PyResult<_>>()
-                .map(builder::Term::Set),
+            PyTerm::Set(vs) => {
+                let mut kinds = vs.iter().map(std::mem::discriminant);
+                if let Some(first) = kinds.next() {
+                    if kinds.any(|k| k != first) {
+                        return Err(PyValueError::new_err(
+                            "set elements must have the same type",
+                        ));
+                    }
+                }
+                vs.iter()
+                    .map(|s| s.to_term())
+                    .collect::<PyResult<_>>()
+                    .map(builder::Term::Set)
+            }
             PyTerm::Array(vs) => vs
                 .iter()
                 .map(|s| s.to_term())
