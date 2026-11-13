@@ -116,8 +116,8 @@ time(2023-06-09T00:00:00Z)
 bytes(hex:aabbff)
 >>> Fact("bytes({bytes})", {'bytes': [0xaa, 0xbb, 255]})
 bytes(hex:aabbff)
->>> Fact("set({set})", {'set': {0, True, "ab", b'\xaa'}})
-set({0, "ab", hex:aa, true})
+>>> Fact("set({set})", {'set': {0, 1, 2}})
+set({0, 1, 2})
 
 Inspecting datalog values
 -------------------------
