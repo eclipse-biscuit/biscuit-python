@@ -517,6 +517,58 @@ class PublicKey:
     # :rtype: bytes
     def to_bytes(self) -> bytes: ...
 
+    # Serializes a public key to DER format
+    #
+    # :return: the public key DER bytes
+    # :rtype: bytes
+    def to_der(self) -> bytes: ...
+
+    # Serializes a public key to PEM format
+    #
+    # :return: the public key PEM string
+    # :rtype: str
+    def to_pem(self) -> str: ...
+
+    # Deserializes a public key from raw bytes
+    #
+    # :param data: the raw bytes
+    # :type data: bytes
+    # :return: the public key
+    # :rtype: PublicKey
+    @classmethod
+    def from_bytes(cls, data: bytes, alg: Algorithm) -> PublicKey: ...
+
+    # Deserializes a public key from DER bytes
+    #
+    # :param der: the DER bytes
+    # :type der: bytes
+    # :return: the public key
+    # :rtype: PublicKey
+    @classmethod
+    def from_der(cls, der: bytes) -> PublicKey: ...
+
+    # Deserializes a public key from a PEM string
+    #
+    # :param pem: the PEM string
+    # :type pem: str
+    # :return: the public key
+    # :rtype: PublicKey
+    @classmethod
+    def from_pem(cls, pem: str) -> PublicKey: ...
+
+    # Deserializes a public key from a hexadecimal string
+    #
+    # :param data: the hex-encoded string
+    # :type data: str
+    # :return: the public key
+    # :rtype: PublicKey
+    def __new__(cls, data: str) -> PublicKey: ...
+    # Serializes a public key to raw bytes
+    #
+    # :return: the public key bytes
+    # :rtype: list
+    def to_bytes(self) -> bytes: ...
+
     # Deserializes a public key from raw bytes
     #
     # :param data: the raw bytes

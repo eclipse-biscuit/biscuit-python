@@ -1134,6 +1134,28 @@ impl PyPublicKey {
         self.0.to_string()
     }
 
+    /// Serializes a public key to DER format
+    ///
+    /// :return: the public key DER bytes
+    /// :rtype: bytes
+    pub fn to_der(&self) -> PyResult<Vec<u8>> {
+        self.0
+            .to_der()
+            .map(|der| der.to_vec())
+            .map_err(|error| PyValueError::new_err(error.to_string()))
+    }
+
+    /// Serializes a public key to PEM format
+    ///
+    /// :return: the public key PEM string
+    /// :rtype: str
+    pub fn to_pem(&self) -> PyResult<String> {
+        self.0
+            .to_pem()
+            .map(|pem| pem.to_string())
+            .map_err(|error| PyValueError::new_err(error.to_string()))
+    }
+
     /// Deserializes a public key from raw bytes
     ///
     /// :param data: the raw bytes
@@ -1198,12 +1220,34 @@ pub struct PyPrivateKey(PrivateKey);
 
 #[pymethods]
 impl PyPrivateKey {
-    /// Serializes a public key to raw bytes
+    /// Serializes a private key to raw bytes
     ///
-    /// :return: the public key bytes
+    /// :return: the private key bytes
     /// :rtype: list
     pub fn to_bytes(&self) -> Vec<u8> {
         self.0.to_bytes().deref().clone()
+    }
+
+    /// Serializes a private key to DER format
+    ///
+    /// :return: the private key DER bytes
+    /// :rtype: bytes
+    pub fn to_der(&self) -> PyResult<Vec<u8>> {
+        self.0
+            .to_der()
+            .map(|der| der.to_vec())
+            .map_err(|error| PyValueError::new_err(error.to_string()))
+    }
+
+    /// Serializes a private key to PEM format
+    ///
+    /// :return: the private key PEM string
+    /// :rtype: str
+    pub fn to_pem(&self) -> PyResult<String> {
+        self.0
+            .to_pem()
+            .map(|pem| pem.to_string())
+            .map_err(|error| PyValueError::new_err(error.to_string()))
     }
 
     /// Serializes a private key to a hexadecimal string
