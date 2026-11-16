@@ -514,3 +514,35 @@ def test_read_third_party_facts():
     facts = authorizer.query(rule)
 
     assert facts[0].terms[0] == "56"
+
+def test_private_key_to_and_from_pem():
+    keypair = KeyPair()
+    private_key_pem = keypair.private_key.to_pem()
+    assert type(private_key_pem) == str
+
+    private_key = PrivateKey.from_pem(pem=private_key_pem)
+    assert repr(keypair.private_key) == repr(private_key)
+
+def test_private_key_to_and_from_der():
+    keypair = KeyPair()
+    private_key_der = keypair.private_key.to_der()
+    assert type(private_key_der) == bytes
+
+    private_key = PrivateKey.from_der(private_key_der)
+    assert repr(keypair.private_key) == repr(private_key)
+
+def test_public_key_to_and_from_pem():
+    keypair = KeyPair()
+    public_key_pem = keypair.public_key.to_pem()
+    assert type(public_key_pem) == str
+
+    public_key = PublicKey.from_pem(pem=public_key_pem)
+    assert repr(keypair.public_key) == repr(public_key)
+
+def test_public_key_to_and_from_der():
+    keypair = KeyPair()
+    public_key_der = keypair.public_key.to_der()
+    assert type(public_key_der) == bytes
+
+    public_key = PublicKey.from_der(public_key_der)
+    assert repr(keypair.public_key) == repr(public_key)
